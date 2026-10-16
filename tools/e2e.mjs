@@ -53,6 +53,12 @@ async function openDoc(file) {
 console.log('\n=== 1. 载入与虚拟化 ===');
 await openDoc('./fixtures/test.pdf');
 {
+  // The outline is fetched and rendered asynchronously. Reading the DOM straight after
+  // the document opens won the race on a fast machine and lost it on CI, where the same
+  // assertion reported zero nodes.
+  await page
+    .waitForFunction(() => document.querySelectorAll('.outline-label').length > 0, { timeout: 15000 })
+    .catch(() => undefined);
   const info = await page.evaluate(() => ({
     total: document.querySelectorAll('.page').length,
     rendered: document.querySelectorAll('.page:not(.unrendered)').length,
