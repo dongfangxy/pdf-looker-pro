@@ -43,12 +43,21 @@ jobs:
         continue-on-error: true
 
       - name: Start the preview server
+        shell: pwsh
         run: |
-          Start-Process -NoNewWindow npm -ArgumentList "run","preview"
-          for ($i = 0; $i -lt 30; $i++) {
-            try { Invoke-WebRequest http://127.0.0.1:4173/ -UseBasicParsing | Out-Null; break }
-            catch { Start-Sleep -Seconds 1 }
+          # `Start-Process npm` cannot resolve npm.cmd on Windows, so go through cmd.
+          Start-Process -FilePath "cmd.exe" `
+            -ArgumentList "/c","npx vite preview --port 4173" `
+            -PassThru -WindowStyle Hidden | Out-Null
+          for ($i = 0; $i -lt 40; $i++) {
+            try {
+              Invoke-WebRequest http://127.0.0.1:4173/ -UseBasicParsing -TimeoutSec 2 | Out-Null
+              Write-Host "preview ready on http://127.0.0.1:4173"
+              exit 0
+            } catch { Start-Sleep -Seconds 1 }
           }
+          Write-Error "preview server did not become ready"
+          exit 1
 
       - name: Run the browser suites
         run: npm test

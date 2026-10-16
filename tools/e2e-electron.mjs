@@ -233,7 +233,7 @@ try {
       const r = el.getBoundingClientRect();
       const top = Math.max(r.top, 60);
       const bottom = Math.min(r.bottom, vh);
-      if (r.width > 100 && bottom - top > 300) return { x: r.left, y: top, w: r.width, h: bottom - top };
+      if (r.width > 100 && bottom - top > 120) return { x: r.left, y: top, w: r.width, h: bottom - top };
     }
     return null;
   });
