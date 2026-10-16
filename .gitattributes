@@ -1,0 +1,20 @@
+# Normalise line endings so the repository stays readable on every platform.
+* text=auto eol=lf
+
+# Windows batch and PowerShell files keep CRLF.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary assets are never converted.
+*.png binary
+*.ico binary
+*.exe binary
+*.ttf binary
+*.arpk binary
+*.pdf binary
+*.woff2 binary
+
+# Keep generated files out of diffs and language statistics.
+public/assets/** linguist-generated=true
+package-lock.json linguist-generated=true

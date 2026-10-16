@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Build and verify
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate fixtures
+        run: npm run fixtures
+
+      - name: Type-check and build
+        run: npm run build
+
+      - name: Regenerate assets and confirm they are reproducible
+        run: |
+          npm run assets
+          git diff --exit-code -- public/assets build
+
+      - name: Install the browser used by the suites
+        run: npx playwright install msedge
+        continue-on-error: true
+
+      - name: Start the preview server
+        run: |
+          Start-Process -NoNewWindow npm -ArgumentList "run","preview"
+          for ($i = 0; $i -lt 30; $i++) {
+            try { Invoke-WebRequest http://127.0.0.1:4173/ -UseBasicParsing | Out-Null; break }
+            catch { Start-Sleep -Seconds 1 }
+          }
+
+      - name: Run the browser suites
+        run: npm test
+
+  packaged:
+    name: Package and verify the build
+    runs-on: windows-latest
+    needs: verify
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate fixtures and build
+        run: |
+          npm run fixtures
+          npm run build
+
+      - name: Package the portable build
+        run: npx electron-builder --win portable
+
+      - name: Report the artefact size
+        run: |
+          Get-ChildItem release -Filter *.exe |
+            Select-Object Name, @{n = "MB"; e = { [math]::Round($_.Length / 1MB, 1) } } |
+            Format-Table -AutoSize
+
+      - name: Run the packaged suites
+        run: npm run test:desktop
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PDFLookerPro-portable
+          path: release/*.exe
+          if-no-files-found: error

@@ -1,0 +1,75 @@
+name: Bug report
+description: Something renders wrongly, or a feature does not behave as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The more precisely you can describe the steps, the
+        faster this can be fixed.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown in the About dialog, or in the release you downloaded
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 23H2"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a document with ...
+        2. Select the ... tool
+        3. Drag across ...
+        4. The box ends up ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: dropdown
+    id: rendering
+    attributes:
+      label: Does the same document open correctly in another reader?
+      description: This separates a rendering bug from a damaged file.
+      options:
+        - "Yes — it opens correctly elsewhere"
+        - "No — it looks wrong everywhere"
+        - "Not applicable"
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images here. For anything visual this is the fastest path.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am using the latest release
+          required: true
+        - label: I searched existing issues for the same problem
+          required: true

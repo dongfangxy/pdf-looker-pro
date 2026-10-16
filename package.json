@@ -1,0 +1,94 @@
+{
+  "name": "pdfreader",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A self-authored desktop PDF reader with annotations, measurement tools and a customisable toolbar.",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc --noEmit",
+    "fixtures": "node tools/make-fixture.mjs 24 public/fixtures/test.pdf --outline && node tools/make-fixture.mjs 200 public/fixtures/large.pdf",
+    "font": "node tools/make-font.mjs assets-src/ui-sans.ttf",
+    "font:check": "node tools/validate-font.mjs assets-src/ui-sans.ttf && node tools/test-font.mjs",
+    "resources": "node tools/pack-resources.mjs",
+    "icon": "node tools/make-icon.mjs",
+    "assets": "npm run font && npm run resources && npm run icon",
+    "test:container": "node tools/test-container.mjs",
+    "electron": "electron .",
+    "e2e": "node tools/e2e.mjs",
+    "e2e:i18n": "node tools/e2e-i18n.mjs",
+    "e2e:res": "node tools/e2e-resources.mjs",
+    "e2e:p5": "node tools/e2e-p5.mjs",
+    "e2e:desktop": "node tools/e2e-desktop.mjs",
+    "package": "npm run build && electron-builder --win portable",
+    "test": "node tools/test-container.mjs && node tools/test-font.mjs && node tools/e2e.mjs && node tools/e2e-i18n.mjs && node tools/e2e-resources.mjs && node tools/e2e-p5.mjs && node tools/e2e-settings.mjs && node tools/e2e-ux.mjs && node tools/e2e-tabs.mjs && node tools/e2e-styles.mjs",
+    "test:desktop": "node tools/e2e-electron.mjs && node tools/e2e-desktop.mjs",
+    "pack": "npm run build && electron-builder --win portable",
+    "screenshot": "node tools/shoot-readme.mjs"
+  },
+  "build": {
+    "appId": "local.pdfreader",
+    "productName": "PDF Looker Pro",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "PDFLookerPro-portable.exe"
+    },
+    "fileAssociations": [
+      {
+        "ext": "pdf",
+        "name": "PDF Document",
+        "description": "PDF document",
+        "role": "Viewer"
+      }
+    ]
+  },
+  "dependencies": {
+    "pdfjs-dist": "^5.4.149"
+  },
+  "devDependencies": {
+    "electron": "^44.8.0",
+    "electron-builder": "^26.15.3",
+    "playwright": "^1.64.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7"
+  },
+  "productName": "PDF Looker Pro",
+  "author": {
+    "name": "Paolu",
+    "email": "dongfangxy@163.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dongfangxy/pdf-looker-pro.git"
+  },
+  "homepage": "https://github.com/dongfangxy/pdf-looker-pro#readme",
+  "bugs": {
+    "url": "https://github.com/dongfangxy/pdf-looker-pro/issues"
+  },
+  "keywords": [
+    "pdf",
+    "pdf-reader",
+    "electron",
+    "pdfjs",
+    "annotation",
+    "desktop",
+    "typescript"
+  ]
+}

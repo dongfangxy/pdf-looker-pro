@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish the portable build
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check that the tag matches the packaged version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart("v")
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          if ($tag -ne $version) {
+            Write-Error "tag v$tag does not match package.json version $version"
+            exit 1
+          }
+
+      - name: Generate fixtures and build
+        run: |
+          npm run fixtures
+          npm run build
+
+      - name: Package
+        run: npx electron-builder --win portable
+
+      - name: Verify the packaged application
+        run: npm run test:desktop
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.exe
+          generate_release_notes: true
+          body_path: docs/RELEASE-1.0.0.md

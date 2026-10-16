@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%233b82f6'/%3E%3Cpath d='M10 8h8l5 5v11a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z' fill='%23fff'/%3E%3C/svg%3E"
+    />
+    <title>PDF Looker Pro</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="toolbar" role="toolbar">
+        <div class="group" data-section="sectionFile">
+          <button id="btn-sidebar" class="btn" title="显示/隐藏侧栏">☰</button>
+          <button id="btn-open" class="btn primary" title="打开 PDF">打开</button>
+          <button id="btn-close-doc" class="btn hidden" title="关闭文档">关闭</button>
+          <input id="file-input" type="file" accept="application/pdf,.pdf" hidden />
+        </div>
+
+        <div class="group" data-section="sectionNav">
+          <button id="btn-first" class="btn hidden" title="第一页">⏮</button>
+          <button id="btn-prev" class="btn" title="上一页">‹</button>
+          <input id="page-input" class="page-input" type="text" inputmode="numeric" value="–" />
+          <span id="page-total" class="muted">/ –</span>
+          <button id="btn-next" class="btn" title="下一页">›</button>
+          <button id="btn-last" class="btn hidden" title="最末页">⏭</button>
+        </div>
+
+        <div class="group" data-section="sectionZoom">
+          <button id="btn-zoom-out" class="btn" title="缩小">−</button>
+          <span id="zoom-label" class="zoom-label">100%</span>
+          <button id="btn-zoom-in" class="btn" title="放大">+</button>
+          <button id="btn-fit-width" class="btn" title="适应宽度">宽度</button>
+          <button id="btn-fit-page" class="btn" title="适应页面">页面</button>
+        </div>
+
+        <div class="group icon-only" data-section="sectionTools">
+          <button id="tool-pointer" class="btn" title="选取对象">选取</button>
+          <button id="tool-hand" class="btn" title="手形工具">手形</button>
+          <button id="tool-select" class="btn" title="选择工具">选择</button>
+          <button id="tool-zoom" class="btn" title="放大镜">放大</button>
+          <button id="tool-snapshot" class="btn" title="快照工具">快照</button>
+        </div>
+
+        <div class="group icon-only" data-section="sectionAnnot">
+          <button id="annot-highlight" class="btn" title="高亮">高亮</button>
+          <button id="annot-underline" class="btn" title="下划线">下划线</button>
+          <button id="annot-strikeout" class="btn" title="删除线">删除线</button>
+          <button id="annot-ink" class="btn" title="自由墨迹">墨迹</button>
+          <button id="annot-note" class="btn" title="便签">便签</button>
+          <button id="annot-rect" class="btn hidden" title="矩形框">矩形</button>
+          <button id="annot-ellipse" class="btn hidden" title="椭圆">椭圆</button>
+          <button id="annot-arrow" class="btn hidden" title="箭头">箭头</button>
+          <button id="annot-textbox" class="btn hidden" title="文本框">文本框</button>
+          <button id="annot-callout" class="btn hidden" title="标注气泡">标注</button>
+          <button id="btn-color" class="btn" title="批注颜色">颜色</button>
+        </div>
+
+        <div class="group icon-only" data-section="sectionMeasure">
+          <button id="measure-distance" class="btn hidden" title="距离测量">距离</button>
+          <button id="measure-perimeter" class="btn hidden" title="周长测量">周长</button>
+          <button id="measure-area" class="btn hidden" title="面积测量">面积</button>
+        </div>
+
+        <div class="group" data-section="sectionView">
+          <button id="view-continuous" class="btn hidden" title="连续滚动">连续</button>
+          <button id="view-single" class="btn hidden" title="单页">单页</button>
+          <button id="view-spread" class="btn hidden" title="双页对开">双页</button>
+          <button id="view-fullscreen" class="btn hidden" title="全屏">全屏</button>
+          <button id="btn-rotate" class="btn hidden" title="旋转 90°">⟳</button>
+        </div>
+
+        <div class="group" data-section="sectionDocument">
+          <button id="annot-toggle" class="btn hidden" title="显示/隐藏批注">显隐</button>
+          <button id="btn-export-page" class="btn hidden" title="导出当前页为图像">导出页</button>
+          <button id="btn-props" class="btn hidden" title="文档属性">属性</button>
+          <button id="btn-about" class="btn hidden" title="关于">关于</button>
+        </div>
+
+        <div class="group" data-section="sectionAlways" data-locked="true">
+          <button id="btn-find" class="btn" title="查找 (Ctrl+F)">查找</button>
+          <button id="btn-settings" class="btn primary" title="设置">⚙ 设置</button>
+          <button id="btn-more" class="btn" title="更多命令 / 自定义工具栏">更多 ▾</button>
+        </div>
+
+        <div class="spacer"></div>
+        <div id="doc-title" class="doc-title"></div>
+
+        <!-- Colour palette popup, opened from the toolbar colour button. -->
+        <div id="color-popup" class="popup hidden" role="dialog" aria-label="批注颜色">
+          <div class="popup-title" id="color-popup-title">颜色</div>
+          <div class="swatches" id="annot-swatches" role="group" aria-label="颜色"></div>
+          <label class="popup-custom">
+            <span>自定义</span>
+            <input id="annot-color" class="color-input" type="color" value="#ffd400" />
+          </label>
+          <div class="popup-row">
+            <span class="popup-label" id="stroke-style-label">线型</span>
+            <div class="chip-group">
+              <button id="stroke-solid" class="chip active" title="实线">实线</button>
+              <button id="stroke-dash" class="chip" title="虚线">虚线</button>
+            </div>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label" id="font-size-label">字号</span>
+            <input id="font-size" class="stroke-range" type="range" min="6" max="48" step="1" value="12" />
+            <span id="font-size-value" class="popup-value">12</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label" id="stroke-width-label">线宽</span>
+            <input id="stroke-width" class="stroke-range" type="range" min="1" max="6" step="0.5" value="1.5" />
+            <span id="stroke-width-value" class="popup-value">1.5</span>
+          </div>
+        </div>
+
+        <!-- Checklist of every toolbar button; ticking one puts it in the bar. -->
+        <div id="overflow-menu" class="popup menu hidden" role="menu" aria-label="自定义工具栏">
+          <div class="popup-title" id="more-title">自定义工具栏</div>
+          <div id="more-list" class="more-list"></div>
+          <div class="menu-section">注释样式</div>
+          <div id="style-list" class="style-list"></div>
+          <button id="style-save" class="menu-item" title="把当前工具与颜色保存为样式">保存当前为样式…</button>
+          <button id="more-reset" class="menu-item" title="恢复默认工具栏">恢复默认工具栏</button>
+        </div>
+      </header>
+
+      <div id="tab-bar" class="tab-bar hidden" role="tablist"></div>
+
+      <div class="workspace">
+        <aside id="sidebar" class="sidebar">
+          <div class="sidebar-tabs" role="tablist">
+            <button id="tab-thumbnails" class="tab active" role="tab" title="缩略图">缩略图</button>
+            <button id="tab-outline" class="tab" role="tab" title="大纲">大纲</button>
+            <button id="tab-annotations" class="tab" role="tab" title="批注">批注</button>
+          </div>
+          <div id="pane-thumbnails" class="sidebar-pane">
+            <div id="thumbnails" class="thumbs"></div>
+          </div>
+          <div id="pane-outline" class="sidebar-pane hidden">
+            <div id="outline" class="outline"></div>
+          </div>
+          <div id="pane-annotations" class="sidebar-pane hidden">
+            <div id="annotations" class="annotations"></div>
+          </div>
+        </aside>
+
+        <div class="content">
+          <div id="scroll-container" class="scroll-container" tabindex="0" data-tool="select">
+            <div id="pages" class="pages"></div>
+          </div>
+
+          <div id="find-bar" class="find-bar hidden">
+            <input id="find-input" class="find-input" type="text" placeholder="查找…" spellcheck="false" />
+            <span id="find-count" class="find-count">–</span>
+            <button id="find-prev" class="btn" title="上一个匹配">‹</button>
+            <button id="find-next" class="btn" title="下一个匹配">›</button>
+            <label class="find-opt" id="find-case-label"><input id="find-case" type="checkbox" /></label>
+            <label class="find-opt" id="find-word-label"><input id="find-word" type="checkbox" /></label>
+            <button id="find-close" class="btn" title="关闭查找栏">✕</button>
+          </div>
+
+          <div id="drop-hint" class="drop-hint">
+            <div class="drop-hint-inner">
+              <div id="drop-title" class="drop-hint-title"></div>
+              <div id="drop-sub" class="drop-hint-sub"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="status-bar" class="status-bar"><span id="status-text">就绪</span></div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
