@@ -149,6 +149,7 @@ docs/            格式文档与设计笔记
 - [`docs/format-arpk.md`](docs/format-arpk.md) — `.arpk` 资源容器格式
 - [`docs/design-notes.md`](docs/design-notes.md) — 设计取舍、踩过的坑、bug 是怎么被找出来的
 - [`docs/RELEASE-1.0.0.md`](docs/RELEASE-1.0.0.md) — 1.0.0 发布说明，含体积问题的讨论
+- [`docs/PUBLISHING.md`](docs/PUBLISHING.md) — 如何发布新版本
 
 ## 已知限制
 

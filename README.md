@@ -159,6 +159,7 @@ docs/            format documentation and design notes
 - [`docs/format-arpk.md`](docs/format-arpk.md) — the `.arpk` resource container format
 - [`docs/design-notes.md`](docs/design-notes.md) — decisions, pitfalls and how bugs were found
 - [`docs/RELEASE-1.0.0.md`](docs/RELEASE-1.0.0.md) — 1.0.0 release notes, including the size discussion
+- [`docs/PUBLISHING.md`](docs/PUBLISHING.md) — how to cut a release
 
 ## Known limitations
 

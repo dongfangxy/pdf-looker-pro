@@ -27,7 +27,8 @@
     "test": "node tools/test-container.mjs && node tools/test-font.mjs && node tools/e2e.mjs && node tools/e2e-i18n.mjs && node tools/e2e-resources.mjs && node tools/e2e-p5.mjs && node tools/e2e-settings.mjs && node tools/e2e-ux.mjs && node tools/e2e-tabs.mjs && node tools/e2e-styles.mjs",
     "test:desktop": "node tools/e2e-electron.mjs && node tools/e2e-desktop.mjs",
     "pack": "npm run build && electron-builder --win portable",
-    "screenshot": "node tools/shoot-readme.mjs"
+    "screenshot": "node tools/shoot-readme.mjs",
+    "version:bump": "node tools/bump-version.mjs"
   },
   "build": {
     "appId": "local.pdfreader",
