@@ -6,11 +6,32 @@
 import { _electron as electron } from 'playwright';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, '..');
 const fixture = join(projectRoot, 'public', 'fixtures', 'test.pdf');
-const packagedExe = process.argv.find((a) => a.startsWith('--exe='))?.slice('--exe='.length) ?? null;
+/**
+ * Finds the packaged build.
+ *
+ * Without an explicit `--exe=` the suites used to fall back to the source tree, so a
+ * run that claimed to verify the packaged artefact was really verifying the sources.
+ * The standard output paths are checked first; the source tree is the last resort.
+ */
+function resolveTarget() {
+  const explicit = process.argv.find((a) => a.startsWith('--exe='))?.slice('--exe='.length);
+  if (explicit) return explicit;
+  const candidates = [
+    'release/win-unpacked/PDF Looker Pro.exe',
+    'release/win-unpacked/PDF Reader.exe',
+  ];
+  for (const candidate of candidates) {
+    const full = resolve(projectRoot, candidate);
+    if (existsSync(full)) return full;
+  }
+  return null;
+}
+const packagedExe = resolveTarget();
 
 let passed = 0;
 let failed = 0;

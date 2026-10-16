@@ -6,7 +6,7 @@
 import { _electron as electron } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 
 /**
  * Runs a toolbar command.
@@ -51,6 +51,27 @@ function check(name, ok, detail = '') {
     failed++;
     console.log(`  ✗ ${name}${detail ? `  ${detail}` : ''}`);
   }
+}
+
+/**
+ * Finds the packaged build.
+ *
+ * Without an explicit `--exe=` the suites used to fall back to the source tree, so a
+ * run that claimed to verify the packaged artefact was really verifying the sources.
+ * The standard output paths are checked first; the source tree is the last resort.
+ */
+function resolveTarget() {
+  const explicit = process.argv.find((a) => a.startsWith('--exe='))?.slice('--exe='.length);
+  if (explicit) return explicit;
+  const candidates = [
+    'release/win-unpacked/PDF Looker Pro.exe',
+    'release/win-unpacked/PDF Reader.exe',
+  ];
+  for (const candidate of candidates) {
+    const full = resolve(projectRoot, candidate);
+    if (existsSync(full)) return full;
+  }
+  return null;
 }
 
 console.log('=== Electron 外壳验证 ===');
