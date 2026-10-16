@@ -47,7 +47,12 @@ two bugs that only appeared in the packaged build, so the packaged run is not op
 
 ## Assets
 
-The icons and the bundled font are generated from source by `npm run assets`. Do not
+The icons and the bundled font are generated from source by `npm run assets`. The `.arpk`
+resource container is byte-reproducible; `build/icon.ico` is not, because it is rasterised
+by a headless browser whose PNG encoder differs between versions. Regenerating it produces
+an equivalent icon, not an identical file, and that is expected.
+
+Do not
 add third-party artwork, fonts or interface strings: the project must stay free of
 material it cannot license.
 

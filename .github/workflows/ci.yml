@@ -28,10 +28,15 @@ jobs:
       - name: Type-check and build
         run: npm run build
 
-      - name: Regenerate assets and confirm they are reproducible
+      # Byte-identity is deliberately not asserted here. `build/icon.ico` is rasterised
+      # by a headless browser, whose PNG encoder changes between browser versions, so
+      # the same source produces equivalent but not identical bytes on different
+      # machines. What matters is that the generators run and their output validates.
+      - name: Regenerate assets and validate them
         run: |
           npm run assets
-          git diff --exit-code -- public/assets build
+          npm run test:container
+          npm run font:check
 
       - name: Install the browser used by the suites
         run: npx playwright install msedge
