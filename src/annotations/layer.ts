@@ -19,6 +19,9 @@ import {
   type AnnotRect,
   type Annotation,
   type AnnotationStore,
+  DEFAULT_STAMP,
+  STAMP_COLORS,
+  type StampId,
 } from './model.js';
 import { distance, formatArea, formatLength, polygonArea, polylineLength, type MeasureUnit } from '../tools/measure.js';
 
@@ -45,6 +48,10 @@ export interface AnnotationLayerOptions {
   pageAtPoint(clientX: number, clientY: number): number | null;
   /** Current tool name; only annotation tools activate gestures. */
   currentTool(): string;
+  /** Which standard stamp a click places. */
+  currentStamp?: () => StampId;
+  /** The word drawn on a stamp of the given kind. */
+  stampLabel?: (stamp: StampId) => string;
   onStatus(text: string, isError?: boolean): void;
   /** Fired when annotations change so the panel and title can update. */
   onChanged(): void;
@@ -72,6 +79,7 @@ const KIND_BY_TOOL: Record<string, AnnotKind> = {
   strikeout: 'strikeout',
   ink: 'ink',
   note: 'note',
+    stamp: 'stamp',
   rect: 'rect',
   ellipse: 'ellipse',
   arrow: 'arrow',
@@ -334,6 +342,24 @@ export class AnnotationLayer {
         part.style.background = item.color;
         part.style.borderRadius = '3px';
         part.style.boxShadow = '0 1px 3px rgba(0,0,0,0.4)';
+      } else if (item.kind === 'stamp') {
+        // Two rules and centred lettering: the shape readers recognise as a stamp.
+        part.style.border = `${Math.max(1, strokePx)}px solid ${item.color}`;
+        part.style.outline = `${Math.max(1, strokePx * 0.6)}px solid ${item.color}`;
+        part.style.outlineOffset = `${Math.max(1, strokePx * 1.4)}px`;
+        part.style.borderRadius = '4px';
+        part.style.background = withAlpha(item.color, 0.08);
+        part.style.color = item.color;
+        part.style.display = 'flex';
+        part.style.alignItems = 'center';
+        part.style.justifyContent = 'center';
+        part.style.textAlign = 'center';
+        part.style.fontWeight = '700';
+        part.style.letterSpacing = `${0.5 * scale}px`;
+        part.style.textTransform = 'uppercase';
+        part.style.fontSize = `${Math.max(7, (item.fontSize ?? 15) * scale)}px`;
+        part.style.overflow = 'hidden';
+        part.textContent = item.note ?? '';
       }
       node.appendChild(part);
     };
@@ -597,6 +623,13 @@ export class AnnotationLayer {
       return;
     }
 
+    if (kind === 'stamp') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.addStamp(page, point);
+      return;
+    }
+
     this.gesture = { kind, page, start: point, points: [point] };
     this.options.scroll.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -701,6 +734,29 @@ export class AnnotationLayer {
     this.afterChange();
     this.options.onCreated();
     await this.editTextInPlace(item, page, { removeIfEmpty: true, wide: true });
+  }
+
+  /**
+   * Places a stamp centred on the click.
+   *
+   * A fixed size in page units rather than a drag: a stamp is a mark of a standard size,
+   * and dragging one out would produce a stamp the wrong shape for its word.
+   */
+  private addStamp(page: number, point: AnnotPoint): void {
+    const stamp = this.options.currentStamp?.() ?? DEFAULT_STAMP;
+    const width = 158;
+    const height = 54;
+    const item = this.store.add({
+      page,
+      kind: 'stamp',
+      color: STAMP_COLORS[stamp],
+      rect: { x: point.x - width / 2, y: point.y - height / 2, w: width, h: height },
+      fontSize: 15,
+      strokeWidth: 1.6,
+      stampId: stamp,
+      note: this.options.stampLabel?.(stamp) ?? stamp,
+    });
+    this.select(item.id);
   }
 /**
        * A click-sized text box.

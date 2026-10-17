@@ -27,10 +27,13 @@ export interface ImportedAnnotation {
   strokeDash?: boolean;
   /** Author, reconstructed from `/T`. */
   author?: string;
+  /** Standard stamp name, from `/Name`. */
+  stampName?: string;
 }
 
 /** Subtypes this application knows how to reconstruct. */
 const KNOWN_SUBTYPES = new Set([
+  'Stamp',
   'Highlight',
   'Underline',
   'StrikeOut',
@@ -162,6 +165,10 @@ function convert(
   // `/T` is the title other writers use for the author. Reading it back keeps the name
   // attached to the annotation across a save and reload instead of dropping it.
   const author = textOf(annotation.value.get('T'));
+  if (subtype === 'Stamp') {
+    const stampName = nameOf(annotation.value.get('Name'));
+    if (stampName) item.stampName = stampName;
+  }
   if (author !== null && author.length > 0) item.author = author;
 
   // The private entry restores what the standard keys cannot express exactly.

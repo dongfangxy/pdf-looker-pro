@@ -41,6 +41,8 @@ export interface PdfAnnotationInput {
   strokeDash?: boolean | undefined;
   /** Name written as the annotation's author, into `/T`. */
   author?: string | undefined;
+  /** Standard stamp name, written as `/Name`. */
+  stampName?: string | undefined;
 }
 
 export interface WriteResult {
@@ -146,6 +148,7 @@ function subtypeFor(kind: AnnotKind): string {
     case 'measure-distance': return 'Line';
     case 'measure-perimeter': return 'PolyLine';
     case 'measure-area': return 'Polygon';
+    case 'stamp': return 'Stamp';
   }
 }
 
@@ -161,6 +164,12 @@ function buildAnnotation(
 
   entries['Type'] = name('Annot');
   entries['Subtype'] = name(subtypeFor(input.kind));
+
+  // `/Name` is what makes a stamp a stamp to another reader, rather than a rectangle
+  // that happens to have words in it.
+  if (input.kind === 'stamp' && input.stampName) {
+    entries['Name'] = name(input.stampName);
+  }
 
   // The title is what every reader shows as the annotation's author. Omitted when the
   // reader has not set a name, rather than writing a placeholder nobody chose.

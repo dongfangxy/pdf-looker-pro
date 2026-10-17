@@ -30,6 +30,7 @@ const KIND_MARK: Record<AnnotKind, string> = {
   callout: '❐',
   'measure-distance': '↔',
   'measure-perimeter': '⬡',
+  stamp: 'annotStamp',
   'measure-area': '▧',
 };
 

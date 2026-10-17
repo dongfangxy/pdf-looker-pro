@@ -29,6 +29,7 @@ export type ToolName =
   | 'strikeout'
   | 'ink'
   | 'note'
+  | 'stamp'
   | 'rect'
   | 'ellipse'
   | 'arrow'

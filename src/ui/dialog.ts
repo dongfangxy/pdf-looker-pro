@@ -347,3 +347,94 @@ export function showConfirmDialog(
     confirm.focus();
   });
 }
+/**
+ * Picks one value from a short list.
+ *
+ * The settings dialogue already renders selects, but it is a form that applies on
+ * confirm; this is a question with a list of answers, and reads differently.
+ */
+export function showChoiceDialog(
+  i18n: I18n,
+  options: {
+    title: string;
+    label: string;
+    value: string;
+    choices: Array<{ value: string; label: string }>;
+    confirm: string;
+    cancel: string;
+  },
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const box = document.createElement('div');
+    box.className = 'modal modal-narrow modal-choice';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+
+    const title = document.createElement('div');
+    title.className = 'modal-title';
+    title.textContent = options.title;
+
+    const body = document.createElement('div');
+    body.className = 'modal-body';
+    const label = document.createElement('label');
+    label.className = 'print-label';
+    label.textContent = options.label;
+    const select = document.createElement('select');
+    select.className = 'modal-input print-select modal-choice-select';
+    for (const choice of options.choices) {
+      const node = document.createElement('option');
+      node.value = choice.value;
+      node.textContent = choice.label;
+      select.appendChild(node);
+    }
+    select.value = options.value;
+    body.append(label, select);
+
+    const footer = document.createElement('div');
+    footer.className = 'modal-footer';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn modal-cancel';
+    cancel.textContent = options.cancel;
+    const confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.className = 'btn primary modal-confirm';
+    confirm.textContent = options.confirm;
+    footer.append(cancel, confirm);
+
+    box.append(title, body, footer);
+    overlay.appendChild(box);
+
+    let settled = false;
+    const finish = (value: string | null): void => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      resolve(value);
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        finish(null);
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        finish(select.value);
+      }
+    };
+
+    confirm.addEventListener('click', () => finish(select.value));
+    cancel.addEventListener('click', () => finish(null));
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) finish(null);
+    });
+    document.addEventListener('keydown', onKey, true);
+
+    document.body.appendChild(overlay);
+    void i18n;
+    select.focus();
+  });
+}

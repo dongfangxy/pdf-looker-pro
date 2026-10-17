@@ -34,10 +34,64 @@ export const ANNOT_KINDS = [
   'measure-distance',
   'measure-perimeter',
   'measure-area',
+  'stamp',
 ] as const;
 export type AnnotKind = (typeof ANNOT_KINDS)[number];
 
 /** A rectangle in unrotated page space at scale 1. */
+/**
+ * The standard stamps.
+ *
+ * A closed set rather than free text: every other reader recognises these six by name,
+ * and a stamp a reader cannot name is only a picture of a stamp.
+ */
+export type StampId = 'approved' | 'confidential' | 'draft' | 'reviewed' | 'void' | 'final';
+
+export const STAMP_IDS: readonly StampId[] = [
+  'approved',
+  'confidential',
+  'draft',
+  'reviewed',
+  'void',
+  'final',
+];
+
+export const DEFAULT_STAMP: StampId = 'approved';
+
+/** Stamp colours, in the ink families these marks conventionally use. */
+export const STAMP_COLORS: Record<StampId, string> = {
+  approved: '#1f8f4e',
+  confidential: '#c0392b',
+  draft: '#7f8c8d',
+  reviewed: '#2c6fbb',
+  void: '#c0392b',
+  final: '#1f8f4e',
+};
+
+/** The `/Name` written into the PDF, which is how other readers recognise a stamp. */
+export const STAMP_PDF_NAMES: Record<StampId, string> = {
+  approved: 'Approved',
+  confidential: 'Confidential',
+  draft: 'Draft',
+  reviewed: 'Reviewed',
+  void: 'Void',
+  final: 'Final',
+};
+
+/** i18n key for the word drawn on the stamp. */
+export const STAMP_LABEL_KEYS: Record<StampId, string> = {
+  approved: 'stampApproved',
+  confidential: 'stampConfidential',
+  draft: 'stampDraft',
+  reviewed: 'stampReviewed',
+  void: 'stampVoid',
+  final: 'stampFinal',
+};
+
+export function isStampId(value: unknown): value is StampId {
+  return typeof value === 'string' && (STAMP_IDS as readonly string[]).includes(value);
+}
+
 export interface AnnotRect {
   x: number;
   y: number;
@@ -68,6 +122,8 @@ export interface Annotation {
   rect?: AnnotRect;
   /** Sticky-note body. */
   note?: string;
+  /** Which standard stamp this is, for `stamp` annotations. */
+  stampId?: StampId | undefined;
   /**
    * Text size in **page-space units**, so a text box keeps its proportions when
    * the view is zoomed instead of drifting out of its own frame.
@@ -99,6 +155,7 @@ export const DEFAULT_COLORS: Record<AnnotKind, string> = {
   callout: '#f0b429',
   'measure-distance': '#e0342f',
   'measure-perimeter': '#2f6bd8',
+  stamp: 'annotStamp',
   'measure-area': '#1f9d55',
 };
 
@@ -264,6 +321,7 @@ export class AnnotationStore {
         ...(annotation.strokeWidth !== undefined ? { strokeWidth: annotation.strokeWidth } : {}),
         ...(annotation.strokeDash !== undefined ? { strokeDash: annotation.strokeDash } : {}),
         ...(annotation.autoFit !== undefined ? { autoFit: annotation.autoFit } : {}),
+        ...(annotation.stampId !== undefined ? { stampId: annotation.stampId } : {}),
     };
     this.items.push(full);
     this.items.sort((a, b) => a.page - b.page || a.createdAt - b.createdAt);
@@ -462,6 +520,7 @@ export function parseAnnotations(input: unknown, pageCount?: number): Validation
       createdAt: isFiniteNumber(a['createdAt']) ? a['createdAt'] : now,
       updatedAt: isFiniteNumber(a['updatedAt']) ? a['updatedAt'] : now,
       author: typeof a['author'] === 'string' ? a['author'] : 'unknown',
+    stampId: isStampId(a['stampId']) ? a['stampId'] : undefined,
       ...(rects ? { rects } : {}),
       ...(typeof a['text'] === 'string' ? { text: a['text'] } : {}),
       ...(strokes ? { strokes } : {}),

@@ -27,6 +27,8 @@ export interface FlattenInput {
   fontSize?: number | undefined;
   strokeWidth?: number | undefined;
   strokeDash?: boolean | undefined;
+  /** Word drawn on a stamp. */
+  stampLabel?: string | undefined;
 }
 
 export interface FlattenPage {
@@ -272,6 +274,40 @@ export function flattenPage(
         }
         needsFont = true;
         parts.push(labelOperators(map, points, item, userUnit, unit, color, x1, y1, x2, y2));
+        break;
+      }
+      case 'stamp': {
+        if (!item.rect) break;
+        const [x1, y1, x2, y2] = map.rect(item.rect);
+        const word = (item.stampLabel ?? '').slice(0, 24);
+        const border = Math.max(1, width);
+        parts.push(`q ${color} RG ${num(border)} w`);
+        parts.push(`${num(x1)} ${num(y1)} ${num(x2 - x1)} ${num(y2 - y1)} re S`);
+        const inset = border * 1.8;
+        parts.push(
+          `${num(x1 + inset)} ${num(y1 + inset)} ${num(x2 - x1 - inset * 2)} ` +
+            `${num(y2 - y1 - inset * 2)} re S`,
+        );
+        parts.push('Q');
+        if (word !== '') {
+          needsFont = true;
+          // Fitted to the box rather than fixed: a long word must not spill outside
+          // the border it is meant to sit inside.
+          const size = Math.max(
+            4,
+            Math.min((y2 - y1) * 0.42, ((x2 - x1) * 0.82) / Math.max(1, word.length * 0.62)),
+          );
+          const textWidth = word.length * size * 0.62;
+          parts.push(
+            textOperators(
+              word.toUpperCase(),
+              (x1 + x2) / 2 - textWidth / 2,
+              (y1 + y2) / 2 - size * 0.36,
+              size,
+              color,
+            ),
+          );
+        }
         break;
       }
       case 'textbox':

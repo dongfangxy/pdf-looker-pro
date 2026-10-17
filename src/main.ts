@@ -25,7 +25,7 @@ import { buildPrintDocument, disposePrintDocument, parsePageRange } from './tool
 import { showPageOpsDialog, type PageOperation } from './ui/pages-dialog.js';
 import { showPrintDialog } from './ui/print-dialog.js';
 import { documentKey, loadProgress, saveProgress } from './viewer/progress.js';
-import { showConfirmDialog, showInputDialog, showPackDialog, showPromptDialog } from './ui/dialog.js';
+import { showChoiceDialog, showConfirmDialog, showInputDialog, showPackDialog, showPromptDialog } from './ui/dialog.js';
 import { showSettingsDialog, type SettingsField } from './ui/settings-dialog.js';
 import { showAboutDialog } from './ui/about-dialog.js';
 import { ENGINE_LICENCE, ENGINE_NAME, LICENCE_NOTE, PRODUCT_AUTHOR, PRODUCT_DESCRIPTION, PRODUCT_EMAIL, PRODUCT_NAME, PRODUCT_TAGLINE, PRODUCT_VERSION } from './product.js';
@@ -43,6 +43,14 @@ import type { PdfValue } from './pdf/syntax.js';
 import { builtinStyles, StyleStore, type AnnotationStyle } from './annotations/styles.js';
 import type { MeasureUnit } from './tools/measure.js';
 import type { Annotation } from './annotations/model.js';
+import {
+  DEFAULT_STAMP,
+  STAMP_IDS,
+  STAMP_LABEL_KEYS,
+  STAMP_PDF_NAMES,
+  isStampId,
+  type StampId,
+} from './annotations/model.js';
 import { AnnotationStore, DEFAULT_COLORS, PALETTE, parseAnnotations, type AnnotKind } from './annotations/model.js';
 import { packAnnotations, sidecarPathFor, unpackAnnotations } from './annotations/sidecar.js';
 import { applyMenu, desktop, isDesktop, setWindowTitle, type MenuDescriptor, type MenuItem } from './platform/desktop.js';
@@ -106,6 +114,8 @@ const ui = {
   newImage: mustFind<HTMLButtonElement>('btn-new-image'),
   reorderPages: mustFind<HTMLButtonElement>('btn-reorder-pages'),
   flatten: mustFind<HTMLButtonElement>('btn-flatten'),
+  annotStamp: mustFind<HTMLButtonElement>('annot-stamp'),
+  stampPick: mustFind<HTMLButtonElement>('btn-stamp-pick'),
   scroll: mustFind<HTMLDivElement>('scroll-container'),
   dropHint: mustFind<HTMLDivElement>('drop-hint'),
   dropTitle: mustFind<HTMLDivElement>('drop-title'),
@@ -215,6 +225,7 @@ if (debugFlag === 'p5') {
       strokes: item.strokes ?? null,
       note: item.note ?? null,
       author: item.author ?? null,
+      stampName: item.stampName ?? null,
       fontSize: item.fontSize ?? null,
       strokeWidth: item.strokeWidth ?? null,
       strokeDash: item.strokeDash ?? null,
@@ -620,6 +631,8 @@ const annotationLayer = new AnnotationLayer({
   geometryFor: (page) => viewer.pageGeometry(page),
   pageAtPoint: (x, y) => viewer.pageAtPoint(x, y),
   currentTool: () => tools.tool,
+  currentStamp: () => currentStamp,
+  stampLabel: (stamp) => i18n.t(STAMP_LABEL_KEYS[stamp]),
   onStatus: (text, isError) => setStatus(text, isError ?? false),
   onChanged: () => {
     annotPanel.render();
@@ -1538,6 +1551,7 @@ async function exportAnnotationsJson(): Promise<void> {
         fontSize: item.fontSize,
         strokeWidth: item.strokeWidth,
         strokeDash: item.strokeDash,
+        stampName: item.stampId ? STAMP_PDF_NAMES[item.stampId] : undefined,
         author: item.author,
       };
       if (list) list.push(input);
@@ -2200,6 +2214,8 @@ command(CMD.GoToPage, 'CmdOrCtrl+G'),
           command(CMD.AnnotStrikeout),
           { type: 'separator' },
           command(CMD.AnnotInk),
+          command(CMD.AnnotStamp),
+          command(CMD.StampPick),
           command(CMD.AnnotNote),
           command(CMD.AnnotRect),
           { type: 'separator' },
@@ -2568,6 +2584,8 @@ bindCommand(CMD.AnnotHighlight, ui.annotHighlight, { onClick: () => tools.setToo
 bindCommand(CMD.AnnotUnderline, ui.annotUnderline, { onClick: () => tools.setTool('underline') });
 bindCommand(CMD.AnnotStrikeout, ui.annotStrikeout, { onClick: () => tools.setTool('strikeout') });
 bindCommand(CMD.AnnotInk, ui.annotInk, { onClick: () => tools.setTool('ink') });
+bindCommand(CMD.AnnotStamp, ui.annotStamp, { onClick: () => tools.setTool('stamp') });
+bindCommand(CMD.StampPick, ui.stampPick, { onClick: () => void pickStamp() });
 bindCommand(CMD.AnnotNote, ui.annotNote, { onClick: () => tools.setTool('note') });
 bindCommand(CMD.AnnotRect, ui.annotRect, { onClick: () => tools.setTool('rect') });
 bindCommand(CMD.AnnotEllipse, ui.annotEllipse, { onClick: () => tools.setTool('ellipse') });
@@ -2650,6 +2668,11 @@ async function flattenAnnotations(): Promise<void> {
         fontSize: item.fontSize,
         strokeWidth: item.strokeWidth,
         strokeDash: item.strokeDash,
+        // The flattened word is the standard English name, not the localised one: the
+        // page carries Helvetica with WinAnsi, which cannot encode CJK, and a stamp that
+        // flattens to question marks is worse than one that flattens to English. The
+        // interactive stamp still shows the reader's own language.
+        stampLabel: item.stampId ? STAMP_PDF_NAMES[item.stampId] : item.note,
       };
       if (list) list.push(input);
       else byPage.set(item.page, [input]);
@@ -2673,6 +2696,24 @@ async function flattenAnnotations(): Promise<void> {
   } catch (error) {
     setStatus(`${i18n.t('flattenFailed')}: ${String((error as Error)?.message ?? error)}`, true);
   }
+}
+
+/** Which standard stamp the tool places. */
+let currentStamp: StampId = DEFAULT_STAMP;
+
+/** Asks which stamp to place, and remembers the answer. */
+async function pickStamp(): Promise<void> {
+  const chosen = await showChoiceDialog(i18n, {
+    title: i18n.t('stampPickTitle'),
+    label: i18n.t('stampNow'),
+    value: currentStamp,
+    choices: STAMP_IDS.map((id) => ({ value: id, label: i18n.t(STAMP_LABEL_KEYS[id]) })),
+    confirm: i18n.t('pageOpsConfirm'),
+    cancel: i18n.t('printCancel'),
+  });
+  if (chosen === null || !isStampId(chosen)) return;
+  currentStamp = chosen;
+  setStatus(`${i18n.t('stampNow')}：${i18n.t(STAMP_LABEL_KEYS[currentStamp])}`);
 }
 
 registerCommand(CMD.SaveIntoPdf, () => void saveIntoPdf());
