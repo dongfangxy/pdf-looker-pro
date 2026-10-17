@@ -13,7 +13,7 @@
  * language switch relabels the menu bar as well as the toolbar.
  */
 import './styles/main.css';
-import { openFromArrayBuffer, openFromUrl, type OpenedDocument } from './viewer/pdf-document.js';
+import { openFromArrayBuffer, type OpenedDocument } from './viewer/pdf-document.js';
 import { Viewer, type ViewMode, type ViewerState } from './viewer/viewer.js';
 import { ThumbnailStrip } from './sidebar/thumbnails.js';
 import { renderOutline } from './sidebar/outline.js';
@@ -27,9 +27,14 @@ import { showAboutDialog } from './ui/about-dialog.js';
 import { ENGINE_LICENCE, ENGINE_NAME, LICENCE_NOTE, PRODUCT_AUTHOR, PRODUCT_DESCRIPTION, PRODUCT_EMAIL, PRODUCT_NAME, PRODUCT_TAGLINE, PRODUCT_VERSION } from './product.js';
 import { loadResourcePack, type ResourcePack } from './assets/registry.js';
 import { AnnotationLayer, annotationKindForTool } from './annotations/layer.js';
+import { writeAnnotations, type PdfAnnotationInput } from './pdf/annotate.js';
+import { readAnnotations } from './pdf/import.js';
+import { PdfDocument } from './pdf/document.js';
+import type { PdfValue } from './pdf/syntax.js';
 import { builtinStyles, StyleStore, type AnnotationStyle } from './annotations/styles.js';
 import type { MeasureUnit } from './tools/measure.js';
 import { readUserUnit } from './tools/measure.js';
+import type { Annotation } from './annotations/model.js';
 import { AnnotationStore, DEFAULT_COLORS, PALETTE, parseAnnotations, type AnnotKind } from './annotations/model.js';
 import { packAnnotations, sidecarPathFor, unpackAnnotations } from './annotations/sidecar.js';
 import { applyMenu, desktop, isDesktop, setWindowTitle, type MenuDescriptor, type MenuItem } from './platform/desktop.js';
@@ -81,6 +86,7 @@ const ui = {
   btnFirst: mustFind<HTMLButtonElement>('btn-first'),
   btnLast: mustFind<HTMLButtonElement>('btn-last'),
   btnCloseDoc: mustFind<HTMLButtonElement>('btn-close-doc'),
+  savePdf: mustFind<HTMLButtonElement>('btn-save-pdf'),
   scroll: mustFind<HTMLDivElement>('scroll-container'),
   dropHint: mustFind<HTMLDivElement>('drop-hint'),
   dropTitle: mustFind<HTMLDivElement>('drop-title'),
@@ -169,6 +175,127 @@ if (debugFlag === 'p5') {
     annotations.add({ page, kind, color: DEFAULT_COLORS[kind], rect: { x, y, w, h } });
   };
   hooks['__saveAnnotations'] = () => saveAnnotations();
+
+  // ---- writing annotations into the PDF ----
+  hooks['__writePdf'] = (pages?: number[]) => buildAnnotatedPdf(pages);
+  // Reads the private entries back with this project's own parser.
+  hooks['__importFromPdf'] = async (bytes: Uint8Array) => {
+    const found = await readAnnotations(bytes);
+    return found.map((item) => ({
+      page: item.page,
+      kind: item.kind,
+      color: item.color,
+      rect: item.rect ?? null,
+      rects: item.rects ?? null,
+      strokes: item.strokes ?? null,
+      note: item.note ?? null,
+      fontSize: item.fontSize ?? null,
+      strokeWidth: item.strokeWidth ?? null,
+      strokeDash: item.strokeDash ?? null,
+    }));
+  };
+
+  hooks['__readPdfPrivate'] = async (bytes: Uint8Array) => {
+    const doc = await PdfDocument.parse(bytes);
+    const pages = await doc.pages();
+    const out: Array<Record<string, unknown>> = [];
+    for (let index = 0; index < pages.length; index++) {
+      const page = pages[index]!;
+      const list = await doc.array(page.annots);
+      for (const entry of list?.value ?? []) {
+        const obj = await doc.dict(entry);
+        if (!obj) continue;
+        const priv = await doc.dict(obj.value.get('PLP'));
+        if (!priv) continue;
+        const read = (key: string): PdfValue | undefined => priv.value.get(key);
+        const k = read('K');
+        const w = read('W');
+        const fs_ = read('F');
+        const d = read('D');
+        out.push({
+          page: index + 1,
+          kind: k?.kind === 'name' ? k.value : null,
+          strokeWidth: w?.kind === 'number' ? w.value : undefined,
+          fontSize: fs_?.kind === 'number' ? fs_.value : undefined,
+          strokeDash: d?.kind === 'bool' ? d.value : undefined,
+        });
+      }
+    }
+    return out;
+  };
+
+  hooks['__roundTripRender'] = async (bytes: Uint8Array) => {
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    const opened = await openFromArrayBuffer(buffer as ArrayBuffer, 'roundtrip.pdf');
+    try {
+      const pdfPage = await opened.doc.getPage(1);
+      const list = await pdfPage.getAnnotations();
+      const viewport = pdfPage.getViewport({ scale: 1 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const context = canvas.getContext('2d');
+      if (context) await pdfPage.render({ canvasContext: context, viewport, canvas } as never).promise;
+      return { pages: opened.pageCount, annots: list.length, rendered: context ? 1 : 0 };
+    } finally {
+      await opened.doc.destroy();
+    }
+  };
+
+  hooks['__pdfDebug'] = async () => {
+    const source = activeSession?.bytes;
+    if (!source) return { error: 'no bytes' };
+    const doc = await PdfDocument.parse(new Uint8Array(source));
+    let pages: Array<{ num: number; box: number[]; rotate: number }> = [];
+    let pageError: string | null = null;
+    try {
+      pages = (await doc.pages()).map((p) => ({ num: p.num, box: p.mediaBox, rotate: p.rotate }));
+    } catch (error) {
+      pageError = String((error as Error)?.message ?? error);
+    }
+    return {
+      pageError,
+      startxref: doc.startxref,
+      size: doc.size,
+      encrypted: doc.encrypted,
+      trailerKeys: [...doc.trailer.keys()],
+      rootRef: doc.rootRef ? JSON.stringify(doc.rootRef) : null,
+      pages,
+    };
+  };
+  hooks['__loadPdfAnnotations'] = async (bytes: ArrayBuffer | Uint8Array) => {
+    const buffer =
+      bytes instanceof Uint8Array
+        ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+        : bytes;
+    const opened = await openFromArrayBuffer(buffer as ArrayBuffer, 'roundtrip.pdf');
+    try {
+      const out: Array<Record<string, unknown>> = [];
+      for (let index = 1; index <= opened.pageCount; index++) {
+        const pdfPage = await opened.doc.getPage(index);
+        const list = await pdfPage.getAnnotations();
+        for (const entry of list) {
+          const record = entry as unknown as Record<string, unknown>;
+          const priv = record['plp'] as { K?: string } | undefined;
+          out.push({
+            page: index,
+            subtype: record['subtype'],
+            rect: record['rect'],
+            contents: (record['contentsObj'] as { str?: string } | undefined)?.str ?? null,
+            color: record['color'] ?? null,
+            kind: priv?.K ?? null,
+            quadPoints: record['quadPoints'] ?? null,
+            inkLists: record['inkLists'] ?? null,
+            line: record['lineCoordinates'] ?? null,
+            vertices: record['vertices'] ?? null,
+          });
+        }
+      }
+      return out;
+    } finally {
+      await opened.doc.destroy();
+    }
+  };
   hooks['__exportJson'] = () => exportAnnotationsJson();
 }
 
@@ -1112,6 +1239,121 @@ async function exportAnnotationsJson(): Promise<void> {
   setStatus(i18n.t('exportDone'));
 }
 
+  /**
+   * Builds a copy of the open PDF with the annotations written into it.
+   *
+   * Annotations are grouped by page and handed to the incremental writer, which
+   * appends objects to the original bytes rather than re-serialising the document.
+   */
+  async function buildAnnotatedPdf(onlyPages?: number[]): Promise<Uint8Array> {
+    const source = activeSession?.bytes;
+    if (!source) throw new Error(i18n.t('pdfNoBytes'));
+    const allowed = onlyPages ? new Set(onlyPages) : null;
+    const byPage = new Map<number, PdfAnnotationInput[]>();
+    for (const item of annotations.all) {
+      if (allowed && !allowed.has(item.page)) continue;
+      const list = byPage.get(item.page - 1);
+      const input: PdfAnnotationInput = {
+        kind: item.kind,
+        color: item.color,
+        rect: item.rect,
+        rects: item.rects,
+        strokes: item.strokes,
+        note: item.note,
+        fontSize: item.fontSize,
+        strokeWidth: item.strokeWidth,
+        strokeDash: item.strokeDash,
+      };
+      if (list) list.push(input);
+      else byPage.set(item.page - 1, [input]);
+    }
+    const updates = [...byPage.entries()].map(([pageIndex, list]) => ({ pageIndex, annotations: list }));
+    const result = await writeAnnotations(new Uint8Array(source), updates);
+    return result.bytes;
+  }
+
+  /** Writes the annotations into the PDF and saves the result as a new file. */
+  async function saveIntoPdf(): Promise<void> {
+    const session = activeSession;
+    if (!session?.bytes) { setStatus(i18n.t('pdfNoBytes'), true); return; }
+    if (annotations.count === 0) { setStatus(i18n.t('annotEmpty'), true); return; }
+    setStatus(i18n.t('savingPdf'));
+    let bytes: Uint8Array;
+    try {
+      bytes = await buildAnnotatedPdf();
+    } catch (error) {
+      const message = String((error as Error)?.message ?? error);
+      setStatus(`${i18n.t('pdfSaveFailed')}: ${message}`, true);
+      return;
+    }
+    const stem = (session.name || 'document').replace(/\.pdf$/i, '');
+    const suggested = session.path
+      ? `${session.path.replace(/\.pdf$/i, '')}-annotated.pdf`
+      : `${stem}-annotated.pdf`;
+    const bridge = desktop;
+    if (bridge) {
+      const target = await bridge.saveFileDialog({
+        title: i18n.resolveCommand(CMD.SaveIntoPdf)?.title ?? 'Save into PDF',
+        defaultPath: suggested,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (!target) return;
+      const result = await bridge.writeFile(target, bytes);
+      if (!result.ok) {
+        setStatus(`${i18n.t('pdfSaveFailed')}: ${result.error ?? target}`, true);
+        return;
+      }
+      // Re-open the updated file, so the reader now shows what was written.
+      await openPath(target, target.split(/[\\/]/).pop() ?? session.name);
+      setStatus(`${i18n.t('pdfSaved')} → ${target.split(/[\\/]/).pop()}`);
+      return;
+    }
+    downloadBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${stem}-annotated.pdf`);
+    setStatus(`${i18n.t('pdfSaved')}: ${stem}-annotated.pdf`);
+  }
+
+/**
+   * Pulls annotations that are already stored in the PDF into the editable model.
+   *
+   * Returns true when the file carried any of its own, in which case the sidecar is not
+   * consulted: the PDF is now the source of truth for this document.
+   */
+  async function importAnnotationsFromPdf(): Promise<boolean> {
+    const source = activeSession?.bytes;
+    if (!source) return false;
+    let found;
+    try {
+      found = await readAnnotations(new Uint8Array(source));
+    } catch {
+      return false;
+    }
+    if (found.length === 0) return false;
+
+    for (const item of found) {
+      // Built field by field: `exactOptionalPropertyTypes` distinguishes an absent key
+      // from one explicitly set to undefined.
+      const input: Omit<Annotation, 'id' | 'createdAt' | 'updatedAt' | 'author'> = {
+        page: item.page,
+        kind: item.kind,
+        color: item.color,
+      };
+      if (item.rect) input.rect = item.rect;
+      if (item.rects) input.rects = item.rects;
+      if (item.strokes) input.strokes = item.strokes;
+      if (item.note !== undefined) input.note = item.note;
+      if (item.fontSize !== undefined) input.fontSize = item.fontSize;
+      if (item.strokeWidth !== undefined) input.strokeWidth = item.strokeWidth;
+      if (item.strokeDash !== undefined) input.strokeDash = item.strokeDash;
+      annotations.add(input);
+    }
+    // Imported annotations are the document's existing state, not unsaved edits.
+    annotations.load([...annotations.all], true);
+    annotationLayer.refreshAll();
+    annotPanel.render();
+    void refreshTitle();
+    return true;
+  }
+
 /** Loads `<document>.pdf.arpk` when it exists, without failing the document open. */
 async function loadSidecar(): Promise<void> {
   if (!desktop || !currentPath) return;
@@ -1292,7 +1534,10 @@ function buildMenuDescriptor(): MenuDescriptor {
           command(CMD.Open, 'CmdOrCtrl+O'),
           { type: 'submenu', label: i18n.t('menuRecent'), items: recentItems },
           { type: 'separator' },
-          command(CMD.SaveAnnotations, 'CmdOrCtrl+S'),
+          // Ctrl+S is the primary save: annotations belong in the PDF now. The sidecar
+          // stays available, on a chord of its own.
+          command(CMD.SaveIntoPdf, 'CmdOrCtrl+S'),
+          command(CMD.SaveAnnotations, 'CmdOrCtrl+Shift+S'),
           command(CMD.ExportAnnotations),
           { type: 'separator' },
           command(CMD.CloseFile, 'CmdOrCtrl+W'),
@@ -1475,7 +1720,10 @@ async function activateSession(session: DocumentSession): Promise<void> {
   annotPanel.render();
   renderTabs();
   await refreshTitle();
-  await loadSidecar();
+  // Annotations that already live in the file take precedence; the sidecar is only
+  // consulted when the PDF itself carried none.
+  const imported = await importAnnotationsFromPdf();
+  if (!imported) await loadSidecar();
   setStatus(`${session.pageCount} ${i18n.t('page')}`);
 }
 
@@ -1487,11 +1735,15 @@ async function activateSession(session: DocumentSession): Promise<void> {
  */
 async function openDocument(data: ArrayBuffer, name: string, path: string | null): Promise<void> {
   setStatus(i18n.t('loading'));
+  // pdf.js transfers the buffer to its worker, which detaches the original. The
+  // incremental write needs those bytes, so a copy is taken before the hand-off.
+  const original = data.slice(0);
   const opened = await openFromArrayBuffer(data, name);
   const reusable = activeSession && !activeSession.opened && !activeSession.annotations.dirty ? activeSession : null;
   const session = reusable ?? createSession(opened.title || name);
   session.name = opened.title || name;
   session.opened = opened;
+  session.bytes = original;
   session.path = path;
   session.key = documentKey(opened.doc.fingerprints, opened.pageCount);
   if (!reusable) sessions.push(session);
@@ -1502,11 +1754,17 @@ async function openDocument(data: ArrayBuffer, name: string, path: string | null
 /** Opens a URL in a new tab. Used by the `?file=` entry point. */
 async function loadUrl(url: string, name?: string): Promise<void> {
   setStatus(i18n.t('loading'));
-  const opened = await openFromUrl(url, name);
+  // Fetch rather than hand pdf.js the URL: an annotation write is an incremental
+  // update of the original bytes, so every open path has to keep them.
+  const response = await fetch(url);
+  const data = await response.arrayBuffer();
+  const original = data.slice(0);
+  const opened = await openFromArrayBuffer(data, name ?? url.split('/').pop() ?? 'document.pdf');
   const reusable = activeSession && !activeSession.opened && !activeSession.annotations.dirty ? activeSession : null;
   const session = reusable ?? createSession(opened.title || name || 'document');
   session.name = opened.title || name || 'document';
   session.opened = opened;
+  session.bytes = original;
   session.key = documentKey(opened.doc.fingerprints, opened.pageCount);
   if (!reusable) sessions.push(session);
   await activateSession(session);
@@ -1623,6 +1881,7 @@ bindCommand(CMD.Rotate, ui.rotate, {
 bindCommand(CMD.FirstPage, ui.btnFirst, { onClick: () => viewer.gotoPage(1) });
 bindCommand(CMD.LastPage, ui.btnLast, { onClick: () => viewer.gotoPage(viewer.pageCount) });
 bindCommand(CMD.CloseFile, ui.btnCloseDoc, { onClick: () => closeDocument() });
+bindCommand(CMD.SaveIntoPdf, ui.savePdf, { onClick: () => void saveIntoPdf() });
 bindCommand(CMD.Find, ui.findOpen, { onClick: openFindBar });
 bindCommand(CMD.Settings, ui.settings, { onClick: () => void openSettings() });
 bindCommand(CMD.About, ui.about, {
@@ -1688,6 +1947,7 @@ registerCommand(CMD.FirstPage, () => viewer.gotoPage(1));
 registerCommand(CMD.Settings, () => void openSettings());
 registerCommand(CMD.LastPage, () => viewer.gotoPage(viewer.pageCount));
 registerCommand(CMD.SaveAnnotations, () => void saveAnnotations());
+registerCommand(CMD.SaveIntoPdf, () => void saveIntoPdf());
 registerCommand(CMD.ExportAnnotations, () => void exportAnnotationsJson());
 registerCommand(CMD.CloseFile, closeDocument);
 registerCommand(CMD.Exit, () => window.close());

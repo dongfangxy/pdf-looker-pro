@@ -65,6 +65,9 @@ use for reading and marking up papers.
 ### Everything else
 
 - **Customisable toolbar** — tick a command in the *More* menu and it appears on the bar
+- **Annotations are written into the PDF itself** — an incremental update appends to
+  the file, so the original bytes are untouched and other readers see the markup
+- **Existing PDF annotations are read back** when you open a file that has them
 - **Export** the current page as an image, or annotations as JSON or `.arpk`
 - **Native menu, recent files and window geometry**, restored between launches
 
@@ -131,16 +134,19 @@ npm run test:desktop # the packaged application
 | `e2e-ux` | toolbar, selection, in-place editing |
 | `e2e-tabs` | multi-document tabs |
 | `e2e-styles` | style presets |
+| `e2e-pdfwrite` | writing annotations into the PDF, verified by reading it back with pdf.js |
+| `e2e-pdfroundtrip` | annotate, save, re-open, and find everything intact |
 | `e2e-electron` | the packaged desktop shell |
 | `e2e-desktop` | native menus, recents, window state |
 
-**352 assertions, 0 failures.**
+**409 assertions, 0 failures.**
 
 ## Project layout
 
 ```
 src/
   annotations/   annotation model, layer, sidecar, style presets
+  pdf/           PDF object syntax, cross-reference reader, incremental writer, import
   i18n/          language packs and command descriptor registry
   platform/      Electron bridge
   resources/     .arpk container reader
@@ -165,9 +171,13 @@ docs/            format documentation and design notes
 
 Stated plainly, because a reader that hides its gaps is hard to trust:
 
-- **Annotations are not written back into the PDF.** There is no PDF writer in this
-  project. Annotations live beside the document in a `.arpk` sidecar, which means other
-  readers will not see them.
+- **Written annotations are not encrypted.** A PDF that is itself encrypted is
+  refused rather than written to, because the security handler is not implemented.
+- **Text in a text box is preserved but may render with a substitute font** in other
+  readers. The text is stored in full; the box asks for Helvetica, and a viewer that
+  cannot find a glyph falls back. This reader always shows it correctly.
+- **An incremental update grows the file.** Saving the same document repeatedly
+  appends another section each time; a PDF optimiser will compact it again.
 - **Windows portable build only.** There is no installer and no signed build.
 - **Measurement covers two-point distance and rectangular perimeter/area.** Polyline
   measurement of irregular shapes is not implemented.

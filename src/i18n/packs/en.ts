@@ -69,6 +69,7 @@ export const en: LanguagePack = {
     [CMD.ViewFullscreen]: { title: 'Full screen', tooltip: 'Enter or leave full screen', status: 'Toggle full screen', short: 'Full screen' },
     [CMD.DocProperties]: { title: 'Document properties', tooltip: 'View document information', status: 'Show document properties', short: 'Properties' },
 
+    [CMD.SaveIntoPdf]: { title: 'Save into PDF', tooltip: 'Write the annotations into the PDF file itself', status: 'Writing into the PDF', short: 'Write' },
     [CMD.SaveAnnotations]: { title: 'Save annotations', tooltip: 'Save annotations to a sidecar file', status: 'Save annotations to a .arpk file beside the PDF', short: 'Save notes' },
     [CMD.ExportAnnotations]: { title: 'Export annotations as JSON', tooltip: 'Export annotation data', status: 'Export annotations to a JSON file', short: 'Export JSON' },
     [CMD.OpenRecent]: { title: 'Open recent', tooltip: 'Recently opened files', status: 'Open a recently used file', short: 'Recent' },
@@ -198,6 +199,11 @@ export const en: LanguagePack = {
 
     fontSize: 'Text size',
     resizeHint: 'Drag to resize; the box then stops fitting its text',
+
+    pdfSaved: 'Annotations written into the PDF',
+    pdfSaveFailed: 'Could not write into the PDF',
+    savingPdf: 'Writing into the PDF…',
+    pdfNoBytes: 'The open document has no original bytes to update',
 
     langSwitchFail: 'That language pack is unavailable',
     commandsBound: 'Commands bound',

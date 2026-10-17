@@ -6,10 +6,30 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Annotations are written into the PDF itself.** A self-authored incremental
+  writer appends objects to the original file, adds a new cross-reference section
+  with a `/Prev` pointer, and rewrites only the page dictionaries that gained
+  annotations. The original bytes are never touched, so a reader that does not
+  understand the new section still sees a valid document.
+- **PDF annotations are read back on open.** A file that already carries markup
+  shows it straight away, editable, with colours, line styles, text sizes and text
+  preserved. Both directions are implemented without a third-party PDF library.
+- `Ctrl+S` now writes into the PDF. The sidecar save moved to `Ctrl+Shift+S`.
+
+### Notes
+
+- An encrypted document is refused rather than written to; the security handler is
+  not implemented.
+- Text boxes store their text in full and ask for Helvetica, so another reader
+  without a matching glyph falls back to a substitute font. This reader is exact.
+- Repeated saves append another section each time. The file stays valid, and a PDF
+  optimiser will compact it.
+
 ### Planned
 
 - Reduce the packaged download size (see the 1.0.0 release notes)
-- Write annotations back into the PDF instead of a sidecar
 - Polyline measurement for irregular shapes
 - An installer, in addition to the portable build
 

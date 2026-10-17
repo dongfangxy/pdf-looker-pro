@@ -20,6 +20,14 @@ export class DocumentSession {
 
   /** The opened document; `.doc` on it is the pdf.js proxy. */
   opened: OpenedDocument | null = null;
+  /**
+   * The document bytes as they were read.
+   *
+   * An annotation write is an incremental update of these exact bytes, so they have
+   * to be kept: re-serialising the parsed document would lose anything this
+   * application does not model.
+   */
+  bytes: ArrayBuffer | null = null;
   /** Filesystem path, when the document came from disk rather than a URL. */
   path: string | null = null;
   /** Display name, without the `*` dirty marker. */
