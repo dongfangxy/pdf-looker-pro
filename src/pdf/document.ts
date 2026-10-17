@@ -38,7 +38,17 @@ export interface PageRecord {
   num: number;
   gen: number;
   mediaBox: [number, number, number, number];
+  /**
+   * Crop box, materialised from the page tree.
+   *
+   * A rewrite flattens the tree into a single `/Pages` node, so anything the page
+   * inherited from an intermediate node has to be written onto the page itself or it
+   * would be lost.
+   */
+  cropBox: [number, number, number, number] | null;
   rotate: number;
+  /** Inherited `/Resources`, materialised for the same reason as the crop box. */
+  resources: PdfValue | null;
   /** Existing `/Annots` value, if the page has one. */
   annots: PdfValue | null;
 }
@@ -204,13 +214,24 @@ export class PdfDocument {
     const pagesRef = root.value.get('Pages');
     const found: PageRecord[] = [];
     const seen = new Set<number>();
-    await this.walkPages(pagesRef, { mediaBox: null, rotate: 0 }, found, seen, 0);
+    await this.walkPages(
+      pagesRef,
+      { mediaBox: null, cropBox: null, resources: null, rotate: 0 },
+      found,
+      seen,
+      0,
+    );
     return found;
   }
 
   private async walkPages(
     nodeRef: PdfValue | undefined,
-    inherited: { mediaBox: [number, number, number, number] | null; rotate: number },
+    inherited: {
+      mediaBox: [number, number, number, number] | null;
+      cropBox: [number, number, number, number] | null;
+      resources: PdfValue | null;
+      rotate: number;
+    },
     out: PageRecord[],
     seen: Set<number>,
     depth: number,
@@ -224,6 +245,8 @@ export class PdfDocument {
     if (!node) return;
 
     const mediaBox = readBox(node, 'MediaBox') ?? inherited.mediaBox;
+    const cropBox = readBox(node, 'CropBox') ?? inherited.cropBox;
+    const resources = node.value.get('Resources') ?? inherited.resources;
     const rotate = numberEntry(node, 'Rotate', inherited.rotate);
 
     const typeValue = node.value.get('Type');
@@ -236,7 +259,9 @@ export class PdfDocument {
           num: nodeRef.num,
           gen: nodeRef.gen,
           mediaBox: mediaBox ?? [0, 0, 612, 792],
-          rotate: ((Math.round(rotate / 90) % 4) + 4) % 4,
+          cropBox,
+          rotate: materialisedRotation(rotate),
+          resources,
           annots: node.value.get('Annots') ?? null,
         });
       }
@@ -244,7 +269,7 @@ export class PdfDocument {
     }
 
     for (const kid of kids?.value ?? []) {
-      await this.walkPages(kid, { mediaBox, rotate }, out, seen, depth + 1);
+      await this.walkPages(kid, { mediaBox, cropBox, resources, rotate }, out, seen, depth + 1);
     }
   }
 
@@ -259,6 +284,39 @@ export class PdfDocument {
     const entry = this.xref.get(num);
     if (!entry || entry.offset === null) return null;
     return parseIndirectAt(this.bytes, entry.offset)?.body ?? null;
+  }
+
+  /** Every object number the cross-reference knows about, ascending. */
+  objectNumbers(): number[] {
+    return [...this.xref.keys()].sort((a, b) => a - b);
+  }
+
+  /** The generation the cross-reference records for an object. */
+  generationOf(num: number): number {
+    return this.xref.get(num)?.gen ?? 0;
+  }
+
+  /** True when the object lives in an object stream and has no text of its own. */
+  isCompressed(num: number): boolean {
+    const entry = this.xref.get(num);
+    return !!entry && entry.offset === null;
+  }
+
+  /**
+   * An object's bytes exactly as they appear in the file, `N G obj` through `endobj`.
+   *
+   * A rewrite copies this verbatim: re-serialising a content stream or a font program
+   * would change bytes that must survive untouched. Returns null for a compressed
+   * object, which has no such bytes.
+   */
+  rawObjectText(num: number): string | null {
+    const entry = this.xref.get(num);
+    if (!entry || entry.offset === null) return null;
+    const offset = entry.offset;
+    if (offset < 0 || offset >= this.bytes.length) return null;
+    const marker = endobjAfter(this.bytes, offset);
+    if (marker < 0) return null;
+    return ascii(this.bytes.subarray(offset, marker));
   }
 
   /** The raw indirect-object text at an offset, which is what an update must preserve. */
@@ -279,6 +337,18 @@ function readBox(value: PdfDict, key: string): [number, number, number, number] 
   if (entry?.kind !== 'array' || entry.value.length < 4) return null;
   const parts = entry.value.slice(0, 4).map((v) => (v.kind === 'number' ? v.value : 0));
   return [parts[0]!, parts[1]!, parts[2]!, parts[3]!];
+}
+
+/**
+ * Normalises a `/Rotate` value to the nearest multiple of 90 in `[0, 360)`.
+ *
+ * The viewer works in quarter turns, but a rewrite writes the degree value back out,
+ * so the normalisation lives here rather than being folded into the record.
+ */
+function materialisedRotation(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const wrapped = Math.round(value / 90) * 90;
+  return ((wrapped % 360) + 360) % 360;
 }
 
 /** Locates the last `startxref` and returns the offset it names. */
@@ -449,21 +519,56 @@ export function parseIndirectAt(bytes: Uint8Array, offset: number): IndirectObje
   return { num, gen, value, body };
 }
 
-function findEndstream(bytes: Uint8Array, from: number): number {
-  // Search backwards from the object tail: `endstream` is the first one after the data.
-  for (let i = from; i + 9 <= bytes.length; i++) {
-    if (
-      bytes[i] === 0x65 && // e
-      ascii(bytes.subarray(i, i + 9)) === 'endstream'
-    ) {
-      let end = i;
-      // Trim the EOL that precedes the keyword.
-      if (end > from && bytes[end - 1] === 0x0a) end--;
-      if (end > from && bytes[end - 1] === 0x0d) end--;
-      return end;
+/**
+ * Finds the byte just past the `endobj` that closes the object starting at `from`.
+ *
+ * A plain forward search is wrong here: a content stream may contain the literal
+ * text `endobj` inside its data. The scan therefore skips over `stream … endstream`
+ * regions and only accepts `endobj` outside one.
+ */
+function endobjAfter(bytes: Uint8Array, from: number): number {
+  let index = from;
+  while (index < bytes.length) {
+    if (bytes[index] === 0x73 && ascii(bytes.subarray(index, index + 6)) === 'stream') {
+      // Skip the stream data and its terminating keyword.
+      let dataStart = index + 6;
+      if (bytes[dataStart] === 0x0d) dataStart++;
+      if (bytes[dataStart] === 0x0a) dataStart++;
+      // Resume *after* the whole keyword. Resuming mid-keyword is what made the `s` of
+      // `endstream` look like a fresh `stream` and swallow the rest of the file.
+      const endstream = endstreamAt(bytes, dataStart);
+      index = endstream >= 0 ? endstream + 9 : bytes.length;
+      continue;
     }
+    if (bytes[index] === 0x65 && ascii(bytes.subarray(index, index + 6)) === 'endobj') {
+      return index + 6;
+    }
+    index++;
   }
-  return bytes.length;
+  return -1;
+}
+
+/**
+ * Finds the `endstream` keyword at or after `from`, returning its first byte.
+ *
+ * Kept separate from `findEndstream` on purpose: that one trims the line break before
+ * the keyword, which is right when slicing stream data and wrong when the caller needs
+ * to resume scanning after the keyword.
+ */
+function endstreamAt(bytes: Uint8Array, from: number): number {
+  for (let i = from; i + 9 <= bytes.length; i++) {
+    if (bytes[i] === 0x65 && ascii(bytes.subarray(i, i + 9)) === 'endstream') return i;
+  }
+  return -1;
+}
+
+function findEndstream(bytes: Uint8Array, from: number): number {
+  const at = endstreamAt(bytes, from);
+  if (at < 0) return bytes.length;
+  let end = at;
+  if (end > from && bytes[end - 1] === 0x0a) end--;
+  if (end > from && bytes[end - 1] === 0x0d) end--;
+  return end;
 }
 
 export { name as pdfName };

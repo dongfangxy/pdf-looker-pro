@@ -32,6 +32,7 @@ import { loadResourcePack, type ResourcePack } from './assets/registry.js';
 import { AnnotationLayer, annotationKindForTool } from './annotations/layer.js';
 import { writeAnnotations, type PdfAnnotationInput } from './pdf/annotate.js';
 import { readAnnotations } from './pdf/import.js';
+import { rewritePdf, type PagePlan } from './pdf/rewrite.js';
 import { History } from './annotations/history.js';
 import { PdfDocument } from './pdf/document.js';
 import type { PdfValue } from './pdf/syntax.js';
@@ -249,6 +250,108 @@ if (debugFlag === 'p5') {
       const context = canvas.getContext('2d');
       if (context) await pdfPage.render({ canvasContext: context, viewport, canvas } as never).promise;
       return { pages: opened.pageCount, annots: list.length, rendered: context ? 1 : 0 };
+    } finally {
+      await opened.doc.destroy();
+    }
+  };
+
+  /** Rewrites the open document from a page plan; used by the verification suites. */
+  hooks['__rewritePdf'] = async (plan: PagePlan[]) => {
+    const source = activeSession?.bytes;
+    if (!source) throw new Error('当前文档没有原始数据');
+    const result = await rewritePdf(new Uint8Array(source), plan);
+    return { pageCount: result.pageCount, size: result.bytes.length, bytes: Array.from(result.bytes) };
+  };
+
+  /** Opens bytes with pdf.js and reports what a reader sees. */
+  /**
+   * Renders a page and hashes the pixels.
+   *
+   * This is the honest test for a rewrite: if the drawing is byte-identical, nothing in
+   * the object graph that matters was lost, whatever the file size says.
+   */
+  hooks['__rewriteDebug'] = async () => {
+    const source = activeSession?.bytes;
+    if (!source) return { error: 'no bytes' };
+    const bytes = new Uint8Array(source);
+    const doc = await PdfDocument.parse(bytes);
+    const numbers = doc.objectNumbers();
+    const raws = numbers.map((n) => doc.rawObjectText(n));
+    const pages = await doc.pages();
+    return {
+      byteLength: bytes.length,
+      objectCount: numbers.length,
+      withRaw: raws.filter((r) => r !== null).length,
+      withoutRaw: raws.filter((r) => r === null).length,
+      rawBytes: raws.reduce((sum, r) => sum + (r ? r.length : 0), 0),
+      firstPageObject: pages[0]?.num ?? null,
+      firstPageRawHead: (() => {
+        const raw = doc.rawObjectText(pages[0]?.num ?? 0);
+        return raw === null ? 'null' : raw.slice(0, 120);
+      })(),
+    };
+  };
+
+  hooks['__pageFingerprint'] = async (bytes: Uint8Array, pageNumber: number, scale = 1) => {
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    const opened = await openFromArrayBuffer(buffer as ArrayBuffer, 'fingerprint.pdf');
+    try {
+      const page = await opened.doc.getPage(pageNumber);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.ceil(viewport.width));
+      canvas.height = Math.max(1, Math.ceil(viewport.height));
+      const context = canvas.getContext('2d', { alpha: false });
+      if (!context) throw new Error('2D 上下文不可用');
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvas, viewport, transform: [1, 0, 0, 1, 0, 0] }).promise;
+      const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let hash = 0x811c9dc5;
+      let ink = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const value = data[i] as number;
+        if (value < 250) ink++;
+        hash ^= value;
+        hash = Math.imul(hash, 0x01000193);
+      }
+      return { hash: (hash >>> 0).toString(16), ink, width: canvas.width, height: canvas.height };
+    } finally {
+      await opened.doc.destroy();
+    }
+  };
+
+  hooks['__pdfSummary'] = async (bytes: Uint8Array) => {
+    const buffer =
+      bytes instanceof Uint8Array
+        ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+        : bytes;
+    const opened = await openFromArrayBuffer(buffer as ArrayBuffer, 'summary.pdf');
+    try {
+      const pages: Array<Record<string, unknown>> = [];
+      for (let index = 1; index <= opened.pageCount; index++) {
+        const page = await opened.doc.getPage(index);
+        const viewport = page.getViewport({ scale: 1 });
+        let text = '';
+        try {
+          const content = await page.getTextContent();
+          text = content.items
+            .map((item) => ('str' in item ? item.str : ''))
+            .join('')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 48);
+        } catch {
+          text = '';
+        }
+        pages.push({
+          width: Math.round(viewport.width),
+          height: Math.round(viewport.height),
+          rotate: page.rotate,
+          text,
+        });
+      }
+      return { pageCount: opened.pageCount, pages };
     } finally {
       await opened.doc.destroy();
     }
