@@ -657,6 +657,16 @@ export class AnnotationLayer {
     const hit = this.store.hitTest(page, point);
     if (hit) {
       this.select(hit.id);
+      // A text tool pressed on an existing text box edits that box. Stacking a second
+      // empty one on top is what makes a reader believe the annotation cannot be
+      // selected: the click selects it, then immediately covers it with a blank box.
+      const activeKind = annotationKindForTool(tool);
+      if (activeKind && TEXT_KINDS.has(activeKind) && TEXT_KINDS.has(hit.kind)) {
+        void this.editTextInPlace(hit, page);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       // A click selects the annotation under any tool, but the *gesture* belongs to
       // whichever tool is active. Swallowing pointerdown here is what broke the
       // snapshot and hand drags whenever they started on top of an annotation.

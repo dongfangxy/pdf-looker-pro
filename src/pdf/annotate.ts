@@ -51,6 +51,8 @@ export interface WriteResult {
   bytes: Uint8Array;
   annotationsWritten: number;
   pagesTouched: number;
+  /** Object numbers this write produced, by one-based page number. */
+  writtenByPage: Map<number, number[]>;
 }
 
 const TEXT_KINDS: ReadonlySet<AnnotKind> = new Set<AnnotKind>(['textbox', 'callout']);
@@ -465,6 +467,13 @@ export interface PageAnnotationUpdate {
   /** Zero-based index into the document's pages. */
   pageIndex: number;
   annotations: PdfAnnotationInput[];
+  /**
+   * Object numbers already on this page that the annotations above replace.
+   *
+   * Whatever these point at is left out of the rebuilt `/Annots`, which is what makes a
+   * deletion effective and keeps a repeated save from writing the same mark twice.
+   */
+  replacedSources?: number[];
 }
 
 /**
@@ -486,7 +495,9 @@ export async function writeAnnotations(
   if (pages.length === 0) throw new Error('没有找到可写入的页面');
 
   const total = updates.reduce((sum, update) => sum + update.annotations.length, 0);
-  if (total === 0) return { bytes: original, annotationsWritten: 0, pagesTouched: 0 };
+  if (total === 0 && updates.every((u) => (u.replacedSources ?? []).length === 0)) {
+    return { bytes: original, annotationsWritten: 0, pagesTouched: 0, writtenByPage: new Map() };
+  }
 
   let nextObjectNumber = doc.size;
   const allocate = (): number => nextObjectNumber++;
@@ -498,11 +509,15 @@ export async function writeAnnotations(
 
   const appended: Array<{ num: number; text: string }> = [];
   const touched: Array<{ num: number; gen: number; text: string }> = [];
+  const writtenByPage = new Map<number, number[]>();
   let annotationsWritten = 0;
 
   for (const update of updates) {
     const page = pages[update.pageIndex];
-    if (!page || update.annotations.length === 0) continue;
+    // A page with no annotations left still has work to do when something was removed:
+    // its `/Annots` has to be rebuilt without them.
+    const dropped = new Set(update.replacedSources ?? []);
+    if (!page || (update.annotations.length === 0 && dropped.size === 0)) continue;
     const mapper = new PageMapper(page.mediaBox);
     const pageRef = ref(page.num, page.gen);
 
@@ -527,9 +542,14 @@ export async function writeAnnotations(
       }
     }
 
-    // Keep whatever was already on the page, then add ours.
-    const existing = await collectAnnotRefs(doc, page);
+    // Keep annotations this application does not own, drop the ones it is replacing,
+    // then add the current set. Appending without dropping is what let a saved
+    // annotation duplicate itself on every save, and a deleted one come back.
+    const existing = (await collectAnnotRefs(doc, page)).filter(
+      (entry) => !(entry.kind === 'ref' && dropped.has(entry.num)),
+    );
     const annotsArray = array([...existing, ...annotNumbers.map((n) => ref(n, 0))]);
+    writtenByPage.set(update.pageIndex + 1, [...annotNumbers]);
     const annotsNumber = allocate();
     appended.push({ num: annotsNumber, text: serializeValue(annotsArray) });
 
@@ -539,7 +559,9 @@ export async function writeAnnotations(
     annotationsWritten += update.annotations.length;
   }
 
-  if (annotationsWritten === 0) return { bytes: original, annotationsWritten: 0, pagesTouched: 0 };
+  if (touched.length === 0) {
+    return { bytes: original, annotationsWritten: 0, pagesTouched: 0, writtenByPage };
+  }
 
   if (fontNumber !== null) {
     appended.push({
@@ -604,7 +626,7 @@ export async function writeAnnotations(
   chunks.push(trailerText);
 
   const bytes = concat([original, latin1(chunks.join(''))]);
-  return { bytes, annotationsWritten, pagesTouched: touched.length };
+  return { bytes, annotationsWritten, pagesTouched: touched.length, writtenByPage };
 }
 
 /** Existing `/Annots` references, so an update does not drop annotations already there. */

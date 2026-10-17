@@ -1725,8 +1725,25 @@ async function exportAnnotationsJson(): Promise<void> {
       if (list) list.push(input);
       else byPage.set(item.page - 1, [input]);
     }
-    const updates = [...byPage.entries()].map(([pageIndex, list]) => ({ pageIndex, annotations: list }));
+    const session = activeSession;
+    // Pages whose annotations were all deleted still have to be rewritten, or the file
+    // keeps the ones that are no longer in the store.
+    if (!allowed && session) {
+      for (const [page, objects] of session.sourceObjects) {
+        if (objects.length === 0) continue;
+        if (!byPage.has(page - 1)) byPage.set(page - 1, []);
+      }
+    }
+    const updates = [...byPage.entries()].map(([pageIndex, list]) => ({
+      pageIndex,
+      annotations: list,
+      // Only when the whole document is being written: a partial export must not
+      // claim to replace objects it is not rewriting.
+      ...(allowed || !session ? {} : { replacedSources: session.sourceObjects.get(pageIndex + 1) ?? [] }),
+    }));
     const result = await writeAnnotations(new Uint8Array(source), updates);
+    // The file now holds these objects instead, so the next save replaces them.
+    if (!allowed && session) session.sourceObjects = result.writtenByPage;
     return result.bytes;
   }
 
@@ -1812,6 +1829,11 @@ async function exportAnnotationsJson(): Promise<void> {
     }
     if (found.length === 0) return false;
 
+    // Replaced wholesale: this is the set that a save must remove before writing the
+    // current annotations, so it has to describe the file as it is now.
+    const session = activeSession;
+    if (session) session.sourceObjects = new Map();
+
     for (const item of found) {
       // Built field by field: `exactOptionalPropertyTypes` distinguishes an absent key
       // from one explicitly set to undefined.
@@ -1831,6 +1853,12 @@ async function exportAnnotationsJson(): Promise<void> {
       if (item.strokeWidth !== undefined) input.strokeWidth = item.strokeWidth;
       if (item.strokeDash !== undefined) input.strokeDash = item.strokeDash;
       annotations.add(input);
+      if (session) {
+        const objects = session.sourceObjects.get(item.page) ?? [];
+        if (item.objectNumber !== undefined) objects.push(item.objectNumber);
+        for (const replyObject of item.replyObjects ?? []) objects.push(replyObject);
+        if (objects.length > 0) session.sourceObjects.set(item.page, objects);
+      }
     }
     // Imported annotations are the document's existing state, not unsaved edits.
     annotations.load([...annotations.all], true);

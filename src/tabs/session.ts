@@ -36,6 +36,15 @@ export class DocumentSession {
   key: string | null = null;
   /** Annotations hidden for this document only. */
   annotationsHidden = false;
+  /**
+   * Annotation objects this application knows came from the file, by page.
+   *
+   * Kept per page so a save can remove them before writing the current set: an
+   * incremental update that only appended would duplicate every annotation it had
+   * already written, and would resurrect one the reader had deleted.
+   */
+  sourceObjects = new Map<number, number[]>();
+
   /** View position captured when the user switched away from this tab. */
   snapshot: Partial<ViewerState> | null = null;
 

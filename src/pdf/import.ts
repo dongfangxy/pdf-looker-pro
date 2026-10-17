@@ -29,6 +29,10 @@ export interface ImportedAnnotation {
   author?: string;
   /** Standard stamp name, from `/Name`. */
   stampName?: string;
+  /** Where this annotation lives in the file, so a later save can replace it. */
+  objectNumber?: number;
+  /** Object numbers of its replies, which a save replaces along with it. */
+  replyObjects?: number[];
   /** Replies reconstructed from annotations whose `/IRT` points here. */
   replies?: AnnotReply[];
 }
@@ -192,7 +196,10 @@ async function readPageAnnotations(
       pending.push({ item, irt: irt.num });
       continue;
     }
-    if (entry.kind === 'ref') byNumber.set(entry.num, item);
+    if (entry.kind === 'ref') {
+      item.objectNumber = entry.num;
+      byNumber.set(entry.num, item);
+    }
     out.push(item);
   }
 
@@ -207,6 +214,10 @@ async function readPageAnnotations(
     }
     const list = parent.replies ?? (parent.replies = []);
     list.push({ author: item.author ?? '', text: item.note ?? '', at: 0 });
+    if (item.objectNumber !== undefined) {
+      const objects = parent.replyObjects ?? (parent.replyObjects = []);
+      objects.push(item.objectNumber);
+    }
   }
   return out;
 }

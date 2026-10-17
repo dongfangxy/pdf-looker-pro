@@ -5,7 +5,7 @@
 简体中文 · [English](README.md)
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078d4.svg)](#下载)
 [![Electron](https://img.shields.io/badge/Electron-44-47848f.svg)](https://www.electronjs.org/)
 [![pdf.js](https://img.shields.io/badge/pdf.js-5.7-orange.svg)](https://mozilla.github.io/pdf.js/)
@@ -73,7 +73,7 @@ PDF Looker Pro 是一个界面完全自研的桌面 PDF 阅读器。渲染使用
 > 加起来远不到 1 MB。
 >
 > 这是第一个版本，**压缩体积是后续路线上的首要事项**。具体机会写在
-> [1.0.0 发布说明](docs/RELEASE-1.0.0.md) 里；简要说，更轻的打包方式和裁剪过的运行时应能在
+> [2.0.0 发布说明](docs/RELEASE-2.0.0.md) 里；简要说，更轻的打包方式和裁剪过的运行时应能在
 > 后续版本里显著降低这个数字。
 
 ## 开始使用

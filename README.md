@@ -5,7 +5,7 @@
 [简体中文](README.zh-CN.md) · English
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078d4.svg)](#download)
 [![Electron](https://img.shields.io/badge/Electron-44-47848f.svg)](https://www.electronjs.org/)
 [![pdf.js](https://img.shields.io/badge/pdf.js-5.7-orange.svg)](https://mozilla.github.io/pdf.js/)
@@ -105,10 +105,10 @@ It is a portable build: no installer, no registry entries, just run it.
 > The portable build is around **108 MB**. That is almost entirely the Electron runtime,
 > not this project — the application's own code and assets come to well under 1 MB.
 >
-> It is the first release, and shrinking it is the main item on the roadmap. See
-> [Release notes for 1.0.0](docs/RELEASE-1.0.0.md) for the specific opportunities; the
-> short version is that a lighter packaging path and a trimmed runtime should cut this
-> substantially in a future release.
+> Shrinking it is still on the roadmap: a lighter packaging path and a trimmed runtime
+> should cut this substantially. See [Release notes for 2.0.0](docs/RELEASE-2.0.0.md)
+> for what changed in this version, and [1.0.0](docs/RELEASE-1.0.0.md) for the original
+> analysis of the download size.
 
 ## Getting started
 
