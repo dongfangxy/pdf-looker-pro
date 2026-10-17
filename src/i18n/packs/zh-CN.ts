@@ -317,6 +317,8 @@ export const zhCN: LanguagePack = {
     searchIdle: '输入要查找的内容，结果会按页列在这里。',
     searchEmpty: '没有匹配的内容。',
     searchSummary: '{a} 处匹配，分布在 {b} 页',
+    highlightFields: '高亮表单字段',
+    highlightFieldsHint: '用半透明色块标出文档里的表单字段（本阅读器还不支持填写）',
     annotReply: '添加回复',
     annotStamp: '图章',
     stampApproved: '已批准',

@@ -62,6 +62,8 @@ use for reading and marking up papers.
 - **Six standard stamps** — approved, confidential, draft, reviewed, void, final —
   written as `/Stamp` with the name other readers recognise
 - **Replies**, written as `/IRT` annotations so other readers show the thread
+- **Form fields highlighted** — the document's `/Widget` rectangles are tinted, so a
+  reader can see where a form asks for input (this reader does not fill them)
 - **A named author** on every annotation, written as `/T`
 - **Flatten** annotations into the page, or **summarise** the annotated pages
 

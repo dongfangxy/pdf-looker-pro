@@ -322,6 +322,8 @@ export const en: LanguagePack = {
     searchIdle: 'Type what to look for; the matches are listed here by page.',
     searchEmpty: 'No matches.',
     searchSummary: '{a} matches on {b} pages',
+    highlightFields: 'Highlight form fields',
+    highlightFieldsHint: 'Tint the form fields in the document (this reader does not fill them yet)',
     annotReply: 'Add a reply',
     annotStamp: 'Stamp',
     stampApproved: 'Approved',

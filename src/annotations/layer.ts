@@ -130,6 +130,10 @@ export class AnnotationLayer {
   private store: AnnotationStore;
   private readonly options: AnnotationLayerOptions;
   private readonly overlays = new Map<number, HTMLDivElement>();
+  /** Form-field rectangles by page, from the document that was opened. */
+  private formFields = new Map<number, AnnotRect[]>();
+  /** Whether those rectangles are painted. */
+  private fieldsVisible = false;
   private selectedId: string | null = null;
 
   private gesture: { kind: AnnotKind; page: number; start: AnnotPoint; points: AnnotPoint[] } | null = null;
@@ -263,7 +267,8 @@ export class AnnotationLayer {
     const items = this.store.byPage(page);
     const pageWidth = geometry.element.clientWidth || geometry.pageWidth * geometry.scale;
 
-    if (items.length === 0 && overlay.childElementCount === 0) {
+    const fieldCount = this.fieldsVisible ? (this.formFields.get(page)?.length ?? 0) : 0;
+    if (items.length === 0 && overlay.childElementCount === 0 && fieldCount === 0) {
       overlay.style.width = `${pageWidth}px`;
       return;
     }
@@ -273,6 +278,53 @@ export class AnnotationLayer {
     overlay.style.height = `${geometry.element.clientHeight}px`;
 
     for (const item of items) this.paintAnnotation(overlay, item, geometry);
+
+    // Drawn after the annotations so a field is never hidden by a highlight sitting on
+    // top of it. The node takes no pointer events, so it cannot swallow a gesture.
+    if (this.fieldsVisible) this.paintFormFields(overlay, page, geometry);
+  }
+
+  /** Paints the form-field rectangles for one page. */
+  private paintFormFields(overlay: HTMLDivElement, page: number, geometry: PageGeometry): void {
+    const rects = this.formFields.get(page);
+    if (!rects) return;
+    const { rotation, pageWidth, pageHeight, scale } = geometry;
+    for (const rect of rects) {
+      const s = toScreen(rect, rotation, pageWidth, pageHeight, scale);
+      const node = document.createElement('div');
+      node.className = 'form-field';
+      node.style.left = `${s.left}px`;
+      node.style.top = `${s.top}px`;
+      node.style.width = `${s.width}px`;
+      node.style.height = `${s.height}px`;
+      node.dataset['field'] = 'true';
+      overlay.appendChild(node);
+    }
+  }
+
+  /**
+   * Replaces the form-field rectangles and repaints.
+   *
+   * Painting them here rather than in a layer of their own is deliberate: this overlay
+   * already handles rotation, zoom and virtualisation, and a second one would have to
+   * re-derive all three.
+   */
+  setFormFields(fields: ReadonlyArray<{ page: number; rect: AnnotRect }>, visible: boolean): void {
+    this.formFields = new Map();
+    for (const field of fields) {
+      const list = this.formFields.get(field.page);
+      if (list) list.push(field.rect);
+      else this.formFields.set(field.page, [field.rect]);
+    }
+    this.fieldsVisible = visible;
+    this.refreshAll();
+  }
+
+  /** Turns the field highlighting on or off without re-reading the document. */
+  setFormFieldsVisible(visible: boolean): void {
+    if (this.fieldsVisible === visible) return;
+    this.fieldsVisible = visible;
+    this.refreshAll();
   }
 
   /** Repaints every page that currently has an overlay. */
@@ -281,6 +333,9 @@ export class AnnotationLayer {
     this.selectionBar = null;
     for (const page of [...this.overlays.keys()]) this.renderPage(page);
     for (const page of new Set(this.store.all.map((a) => a.page))) this.renderPage(page);
+    // Pages that only carry form fields have no annotations to bring them in, so they
+    // are named here or their overlay is never created.
+    for (const page of this.fieldsVisible ? this.formFields.keys() : []) this.renderPage(page);
     const selected = this.selectedId ? this.store.byId(this.selectedId) : null;
     if (selected) {
       const overlay = this.overlays.get(selected.page);

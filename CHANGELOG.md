@@ -56,6 +56,9 @@ All notable changes are recorded here. The format follows
 - **Standard stamps**, written as `/Stamp` with the `/Name` other readers recognise.
 - **Annotation replies**, written as `/IRT` annotations so a thread survives a save.
 - **A named author**, written as `/T` and read back on open.
+- **Form fields are highlighted** — `/Widget` rectangles are tinted from a setting, so
+  a reader can see where a form asks for input. Filling them is not implemented and is
+  not claimed.
 - **Flatten** annotations into the page, and **summarise** the annotated pages into a
   new document.
 - **A search panel** listing matches by page, **folder search** across documents, and

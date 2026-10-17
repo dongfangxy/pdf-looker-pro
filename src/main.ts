@@ -40,7 +40,7 @@ import { ENGINE_LICENCE, ENGINE_NAME, LICENCE_NOTE, PRODUCT_AUTHOR, PRODUCT_DESC
 import { loadResourcePack, type ResourcePack } from './assets/registry.js';
 import { AnnotationLayer, annotationKindForTool } from './annotations/layer.js';
 import { writeAnnotations, type PdfAnnotationInput } from './pdf/annotate.js';
-import { readAnnotations } from './pdf/import.js';
+import { readAnnotations, readFormFields } from './pdf/import.js';
 import { flattenPage, type FlattenInput } from './pdf/flatten.js';
 import { readUserUnit } from './tools/measure.js';
 import { createPdf, type NewPage } from './pdf/create.js';
@@ -299,6 +299,7 @@ if (debugFlag === 'p5') {
 
   /** Rewrites the open document from a page plan; used by the verification suites. */
   /** Merges extra bytes into the open document; used by the verification suite. */
+  hooks['__formFields'] = async () => { const b = activeSession?.bytes; return b ? readFormFields(new Uint8Array(b)) : []; };
   hooks['__mergePdf'] = async (extra: Uint8Array, at: number) => {
     const source = activeSession?.bytes;
     if (!source) throw new Error('当前文档没有原始数据');
@@ -689,6 +690,9 @@ const viewer = new Viewer(ui.pages, ui.scroll, {
     ui.next.disabled = page >= total;
     thumbnails.setCurrentPage(page);
     viewer.markCurrentPage(page);
+    // Repaints here because this fires once the page is laid out, which is the earliest
+    // moment a form-field overlay can be placed.
+    annotationLayer.refreshAll();
   },
   onZoomChange: (percent, mode) => {
     ui.zoomLabel.textContent = `${percent}%`;
@@ -1053,6 +1057,8 @@ interface AppSettings {
   defaultZoomMode: DefaultZoom;
   /** Name written as the author of new annotations. */
   author: string;
+  /** Tint the document's form fields so they can be seen. */
+  highlightFields: boolean;
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -1063,6 +1069,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   defaultViewMode: 'continuous',
   defaultZoomMode: 'fit-width',
   author: '',
+  highlightFields: true,
 };
 
 let appSettings: AppSettings = { ...DEFAULT_APP_SETTINGS };
@@ -1191,6 +1198,13 @@ function buildSettingsFields(): SettingsField[] {
       ],
     },
     {
+      key: 'highlightFields',
+      kind: 'toggle',
+      label: i18n.t('highlightFields'),
+      hint: i18n.t('highlightFieldsHint'),
+      value: appSettings.highlightFields,
+    },
+    {
       key: 'author',
       kind: 'text',
       label: i18n.t('annotAuthor'),
@@ -1252,6 +1266,8 @@ async function openSettings(): Promise<void> {
 
   const author = String(result['author'] ?? '').trim().slice(0, 64);
   appSettings.author = author;
+  appSettings.highlightFields = result['highlightFields'] === true;
+  annotationLayer.setFormFieldsVisible(appSettings.highlightFields);
   annotations.defaultAuthor = author || PRODUCT_AUTHOR;
 
   const language = String(result['language'] ?? i18n.languageId);
@@ -2053,6 +2069,30 @@ async function reorderPages(): Promise<void> {
   setStatus(dropped > 0 ? `${i18n.t('reorderDone')}（${dropped} 条批注随页面删除）` : i18n.t('reorderDone'));
 }
 
+/**
+ * Reads the open document's form fields so they can be tinted.
+ *
+ * Highlighting is about seeing where a form asks for input, not about filling it: this
+ * reader has no form support, and a field it cannot fill is still a field worth showing.
+ */
+async function refreshFormFields(): Promise<void> {
+  const bytes = activeSession?.bytes;
+  if (!bytes) {
+    annotationLayer.setFormFields([], false);
+    return;
+  }
+  try {
+    const fields = await readFormFields(new Uint8Array(bytes));
+    annotationLayer.setFormFields(fields, appSettings.highlightFields);
+    // The pages may not be laid out yet when the fields arrive; one frame later they are,
+    // and the overlay can place them.
+    requestAnimationFrame(() => annotationLayer.refreshAll());
+  } catch {
+    // A document whose annotations will not parse simply has no fields to show.
+    annotationLayer.setFormFields([], false);
+  }
+}
+
 /** Loads `<document>.pdf.arpk` when it exists, without failing the document open. */
 /** Loads `<document>.pdf.arpk` when it exists, without failing the document open. */
 async function loadSidecar(): Promise<void> {
@@ -2518,6 +2558,9 @@ async function openDocument(data: ArrayBuffer, name: string, path: string | null
   session.key = documentKey(opened.doc.fingerprints, opened.pageCount);
   if (!reusable) sessions.push(session);
   await activateSession(session);
+  // Here, not in activateSession: this is the first point where the bytes are on the
+  // session, and the field rectangles are read from those bytes.
+  void refreshFormFields();
   if (path) await rememberRecent(path, name);
 }
 
@@ -2538,6 +2581,7 @@ async function loadUrl(url: string, name?: string): Promise<void> {
   session.key = documentKey(opened.doc.fingerprints, opened.pageCount);
   if (!reusable) sessions.push(session);
   await activateSession(session);
+  void refreshFormFields();
 }
 
 /**

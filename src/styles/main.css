@@ -1398,3 +1398,17 @@ html, body {
 .search-saved-forget:hover {
   opacity: 1;
 }
+/* A form field, tinted so the reader can see where a form asks for input. */
+.form-field {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 2px;
+  background: rgba(255, 214, 92, 0.28);
+  outline: 1px solid rgba(214, 158, 0, 0.55);
+  outline-offset: -1px;
+}
+
+[data-theme='dark'] .form-field {
+  background: rgba(255, 214, 92, 0.2);
+  outline-color: rgba(255, 214, 92, 0.5);
+}

@@ -107,6 +107,50 @@ function colorOf(value: PdfValue | undefined): string {
 }
 
 /** Reads every annotation this application can reconstruct, in page order. */
+/** A form field's rectangle, in display page space. */
+export interface FormFieldRect {
+  page: number;
+  rect: AnnotRect;
+  /** The field's name, when it declares one. */
+  name?: string;
+}
+
+/**
+ * Finds the form fields in a document.
+ *
+ * Only widgets are looked for, and only their rectangles: this reader highlights where a
+ * form asks for input so the reader can see it, and does not claim to fill anything.
+ */
+export async function readFormFields(bytes: Uint8Array): Promise<FormFieldRect[]> {
+  const doc = await PdfDocument.parse(bytes);
+  const pages = await doc.pages();
+  const out: FormFieldRect[] = [];
+
+  for (let index = 0; index < pages.length; index++) {
+    const page = pages[index];
+    if (!page) continue;
+    const list = await doc.array(page.annots);
+    if (!list) continue;
+    const mapper = new InverseMapper(page.mediaBox);
+    for (const entry of list.value) {
+      const annotation = await doc.dict(entry);
+      if (!annotation) continue;
+      if (nameOf(annotation.value.get('Subtype')) !== 'Widget') continue;
+      const box = numbersOf(annotation.value.get('Rect'));
+      if (box.length < 4) continue;
+      const rect = mapper.rect(box[0]!, box[1]!, box[2]!, box[3]!);
+      if (!(rect.w > 0.5) || !(rect.h > 0.5)) continue;
+      const name = textOf(annotation.value.get('T'));
+      out.push({
+        page: index + 1,
+        rect,
+        ...(name !== null && name !== '' ? { name } : {}),
+      });
+    }
+  }
+  return out;
+}
+
 export async function readAnnotations(bytes: Uint8Array): Promise<ImportedAnnotation[]> {
   const doc = await PdfDocument.parse(bytes);
   if (doc.encrypted) return [];
