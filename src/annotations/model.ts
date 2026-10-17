@@ -198,6 +198,14 @@ function newId(): string {
 }
 
 export class AnnotationStore {
+  /**
+   * Who new annotations are attributed to.
+   *
+   * A field on the store rather than a parameter on every call: the reader sets it once
+   * in the settings, and every tool that creates an annotation would otherwise have to
+   * thread it through.
+   */
+  defaultAuthor = 'local';
   private items: Annotation[] = [];
   private listeners = new Set<StoreListener>();
   private dirtyFlag = false;
@@ -244,7 +252,7 @@ export class AnnotationStore {
       color: annotation.color,
       createdAt: now,
       updatedAt: now,
-      author: annotation.author ?? 'local',
+      author: annotation.author || this.defaultAuthor,
       ...(annotation.rects ? { rects: annotation.rects } : {}),
       ...(annotation.text !== undefined ? { text: annotation.text } : {}),
       ...(annotation.strokes ? { strokes: annotation.strokes } : {}),

@@ -14,9 +14,11 @@ export interface SettingsOption {
 
 export interface SettingsField {
   key: string;
-  kind: 'select' | 'toggle';
+  kind: 'select' | 'toggle' | 'text';
   label: string;
   hint?: string;
+  /** Shown inside an empty text field. */
+  placeholder?: string;
   value: string | boolean;
   options?: SettingsOption[];
 }
@@ -95,6 +97,14 @@ export function showSettingsDialog(
           input.className = 'settings-toggle';
           input.dataset['key'] = field.key;
           input.checked = field.value === true;
+          row.appendChild(input);
+        } else if (field.kind === 'text') {
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'settings-text';
+          input.dataset['key'] = field.key;
+          input.value = String(field.value ?? '');
+          input.placeholder = field.placeholder ?? '';
           row.appendChild(input);
         } else {
           const select = document.createElement('select');

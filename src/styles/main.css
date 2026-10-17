@@ -1210,3 +1210,21 @@ html, body {
   #print-root img { display: block; margin: 0 auto; max-width: 100%; height: auto; }
   html, body { background: #fff !important; }
 }
+
+/* Annotation author, shown on the row that lists the annotation. */
+.annot-author {
+  font-size: 11px;
+  opacity: 0.66;
+  margin-bottom: 2px;
+}
+
+/* A settings row that takes free text rather than a choice. */
+.settings-text {
+  min-width: 180px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}

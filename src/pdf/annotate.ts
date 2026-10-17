@@ -39,6 +39,8 @@ export interface PdfAnnotationInput {
   fontSize?: number | undefined;
   strokeWidth?: number | undefined;
   strokeDash?: boolean | undefined;
+  /** Name written as the annotation's author, into `/T`. */
+  author?: string | undefined;
 }
 
 export interface WriteResult {
@@ -159,6 +161,12 @@ function buildAnnotation(
 
   entries['Type'] = name('Annot');
   entries['Subtype'] = name(subtypeFor(input.kind));
+
+  // The title is what every reader shows as the annotation's author. Omitted when the
+  // reader has not set a name, rather than writing a placeholder nobody chose.
+  if (input.author && input.author.trim() !== '') {
+    entries['T'] = hexText(input.author.trim());
+  }
   entries['Rect'] = array(mapper.rect(box).map((v) => num(v)));
   entries['P'] = pageRef;
   entries['F'] = num(4); // Print

@@ -289,6 +289,8 @@ export const zhCN: LanguagePack = {
     reorderLabel: '页面顺序',
     reorderDone: '页面已重排',
 
+    annotAuthor: '注释作者',
+    annotAuthorHint: '写入 PDF 的 /T，其他阅读器会显示为批注作者',
     flattenConfirm: '将把 {n} 条注释画进页面内容，之后不能再单独编辑。继续吗？',
     flattenDone: '注释已展平到页面内容',
     flattenNone: '当前文档没有注释',

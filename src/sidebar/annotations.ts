@@ -121,7 +121,15 @@ export class AnnotationPanel {
 
         const body = document.createElement('div');
         body.className = 'annot-body';
-        const label = document.createElement('div');
+        // The author is what makes a comment attributable when several people annotate the
+    // same file, so it belongs on the row rather than buried in the detail.
+    if (item.author) {
+      const author = document.createElement('div');
+      author.className = 'annot-author';
+      author.textContent = item.author;
+      row.appendChild(author);
+    }
+    const label = document.createElement('div');
         label.className = 'annot-kind';
         label.textContent = this.options.kindLabel(item.kind);
         body.appendChild(label);

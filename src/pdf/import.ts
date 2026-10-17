@@ -25,6 +25,8 @@ export interface ImportedAnnotation {
   fontSize?: number;
   strokeWidth?: number;
   strokeDash?: boolean;
+  /** Author, reconstructed from `/T`. */
+  author?: string;
 }
 
 /** Subtypes this application knows how to reconstruct. */
@@ -156,6 +158,11 @@ function convert(
 
   const item: ImportedAnnotation = { kind, page, ...base };
   if (note !== undefined && note.length > 0) item.note = note;
+
+  // `/T` is the title other writers use for the author. Reading it back keeps the name
+  // attached to the annotation across a save and reload instead of dropping it.
+  const author = textOf(annotation.value.get('T'));
+  if (author !== null && author.length > 0) item.author = author;
 
   // The private entry restores what the standard keys cannot express exactly.
   if (priv) {

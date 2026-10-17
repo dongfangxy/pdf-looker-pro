@@ -214,6 +214,7 @@ if (debugFlag === 'p5') {
       rects: item.rects ?? null,
       strokes: item.strokes ?? null,
       note: item.note ?? null,
+      author: item.author ?? null,
       fontSize: item.fontSize ?? null,
       strokeWidth: item.strokeWidth ?? null,
       strokeDash: item.strokeDash ?? null,
@@ -1002,6 +1003,8 @@ interface AppSettings {
   pageGap: PageGap;
   defaultViewMode: ViewMode;
   defaultZoomMode: DefaultZoom;
+  /** Name written as the author of new annotations. */
+  author: string;
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -1011,6 +1014,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   pageGap: 'normal',
   defaultViewMode: 'continuous',
   defaultZoomMode: 'fit-width',
+  author: '',
 };
 
 let appSettings: AppSettings = { ...DEFAULT_APP_SETTINGS };
@@ -1139,6 +1143,13 @@ function buildSettingsFields(): SettingsField[] {
       ],
     },
     {
+      key: 'author',
+      kind: 'text',
+      label: i18n.t('annotAuthor'),
+      hint: i18n.t('annotAuthorHint'),
+      value: appSettings.author,
+    },
+    {
       key: 'pageGap',
       kind: 'select',
       label: i18n.t('pageGap'),
@@ -1191,10 +1202,22 @@ async function openSettings(): Promise<void> {
   const zoom = String(result['defaultZoomMode'] ?? appSettings.defaultZoomMode) as DefaultZoom;
   applyReadingSettings();
 
+  const author = String(result['author'] ?? '').trim().slice(0, 64);
+  appSettings.author = author;
+  annotations.defaultAuthor = author || PRODUCT_AUTHOR;
+
   const language = String(result['language'] ?? i18n.languageId);
   if (language !== i18n.languageId) i18n.setLanguage(language);
 
-  await persistSettings({ theme, pageGap: gap, showStatusBar: appSettings.showStatusBar, showSidebar: appSettings.showSidebar, defaultViewMode: view, defaultZoomMode: zoom });
+  await persistSettings({
+    theme,
+    pageGap: gap,
+    showStatusBar: appSettings.showStatusBar,
+    showSidebar: appSettings.showSidebar,
+    defaultViewMode: view,
+    defaultZoomMode: zoom,
+    author,
+  });
   if (language !== i18n.languageId) await persistSettings({ language } as Partial<AppSettings>);
 
   if (viewer.hasDocument) {
@@ -1515,6 +1538,7 @@ async function exportAnnotationsJson(): Promise<void> {
         fontSize: item.fontSize,
         strokeWidth: item.strokeWidth,
         strokeDash: item.strokeDash,
+        author: item.author,
       };
       if (list) list.push(input);
       else byPage.set(item.page - 1, [input]);
@@ -1609,10 +1633,12 @@ async function exportAnnotationsJson(): Promise<void> {
     for (const item of found) {
       // Built field by field: `exactOptionalPropertyTypes` distinguishes an absent key
       // from one explicitly set to undefined.
-      const input: Omit<Annotation, 'id' | 'createdAt' | 'updatedAt' | 'author'> = {
+      const input: Omit<Annotation, 'id' | 'createdAt' | 'updatedAt'> = {
         page: item.page,
         kind: item.kind,
         color: item.color,
+        // Keep the file's own author rather than the reader's name from the settings.
+        author: item.author ?? '',
       };
       if (item.rect) input.rect = item.rect;
       if (item.rects) input.rects = item.rects;

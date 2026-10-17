@@ -294,6 +294,8 @@ export const en: LanguagePack = {
     reorderLabel: 'Page order',
     reorderDone: 'Pages reordered',
 
+    annotAuthor: 'Annotation author',
+    annotAuthorHint: 'Written to the PDF as /T, which other readers show as the annotation author',
     flattenConfirm: 'This draws {n} annotations into the page, after which they can no longer be edited separately. Continue?',
     flattenDone: 'Annotations flattened into the page',
     flattenNone: 'This document has no annotations',
