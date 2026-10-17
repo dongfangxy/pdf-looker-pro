@@ -25,7 +25,7 @@ import { buildPrintDocument, disposePrintDocument, parsePageRange } from './tool
 import { showPageOpsDialog, type PageOperation } from './ui/pages-dialog.js';
 import { showPrintDialog } from './ui/print-dialog.js';
 import { documentKey, loadProgress, saveProgress } from './viewer/progress.js';
-import { showInputDialog, showPackDialog, showPromptDialog } from './ui/dialog.js';
+import { showConfirmDialog, showInputDialog, showPackDialog, showPromptDialog } from './ui/dialog.js';
 import { showSettingsDialog, type SettingsField } from './ui/settings-dialog.js';
 import { showAboutDialog } from './ui/about-dialog.js';
 import { ENGINE_LICENCE, ENGINE_NAME, LICENCE_NOTE, PRODUCT_AUTHOR, PRODUCT_DESCRIPTION, PRODUCT_EMAIL, PRODUCT_NAME, PRODUCT_TAGLINE, PRODUCT_VERSION } from './product.js';
@@ -33,6 +33,8 @@ import { loadResourcePack, type ResourcePack } from './assets/registry.js';
 import { AnnotationLayer, annotationKindForTool } from './annotations/layer.js';
 import { writeAnnotations, type PdfAnnotationInput } from './pdf/annotate.js';
 import { readAnnotations } from './pdf/import.js';
+import { flattenPage, type FlattenInput } from './pdf/flatten.js';
+import { readUserUnit } from './tools/measure.js';
 import { createBlankPdf, createPdfFromJpeg } from './pdf/create.js';
 import { rewritePdf, type PagePlan } from './pdf/rewrite.js';
 import { History } from './annotations/history.js';
@@ -40,7 +42,6 @@ import { PdfDocument } from './pdf/document.js';
 import type { PdfValue } from './pdf/syntax.js';
 import { builtinStyles, StyleStore, type AnnotationStyle } from './annotations/styles.js';
 import type { MeasureUnit } from './tools/measure.js';
-import { readUserUnit } from './tools/measure.js';
 import type { Annotation } from './annotations/model.js';
 import { AnnotationStore, DEFAULT_COLORS, PALETTE, parseAnnotations, type AnnotKind } from './annotations/model.js';
 import { packAnnotations, sidecarPathFor, unpackAnnotations } from './annotations/sidecar.js';
@@ -104,6 +105,7 @@ const ui = {
   newBlank: mustFind<HTMLButtonElement>('btn-new-blank'),
   newImage: mustFind<HTMLButtonElement>('btn-new-image'),
   reorderPages: mustFind<HTMLButtonElement>('btn-reorder-pages'),
+  flatten: mustFind<HTMLButtonElement>('btn-flatten'),
   scroll: mustFind<HTMLDivElement>('scroll-container'),
   dropHint: mustFind<HTMLDivElement>('drop-hint'),
   dropTitle: mustFind<HTMLDivElement>('drop-title'),
@@ -350,7 +352,7 @@ if (debugFlag === 'p5') {
             .join('')
             .replace(/\s+/g, ' ')
             .trim()
-            .slice(0, 48);
+            .slice(0, 400);
         } catch {
           text = '';
         }
@@ -2113,6 +2115,7 @@ function buildMenuDescriptor(): MenuDescriptor {
           command(CMD.RotatePages),
           command(CMD.InsertBlankPage),
           command(CMD.ExtractPages),
+          command(CMD.FlattenAnnotations),
           command(CMD.CropPages),
           command(CMD.Print, 'CmdOrCtrl+P'),
           command(CMD.Undo, 'CmdOrCtrl+Z'),
@@ -2576,8 +2579,76 @@ bindCommand(CMD.InsertBlankPage, ui.insertPage, { onClick: () => void runPageOpe
 bindCommand(CMD.ExtractPages, ui.extractPages, { onClick: () => void runPageOperation('extract') });
 bindCommand(CMD.NewBlankDocument, ui.newBlank, { onClick: () => void newBlankDocument() });
 bindCommand(CMD.NewFromImage, ui.newImage, { onClick: () => void newFromImage() });
+bindCommand(CMD.FlattenAnnotations, ui.flatten, { onClick: () => void flattenAnnotations() });
 bindCommand(CMD.ReorderPages, ui.reorderPages, { onClick: () => void reorderPages() });
 bindCommand(CMD.CropPages, ui.cropPages, { onClick: () => void runPageOperation('crop') });
+/**
+ * Draws every annotation into the page content and drops the annotations themselves.
+ *
+ * Flattening is one-way by nature, so it asks first. The rewritten document replaces the
+ * open one and the annotation store is emptied: leaving the marks in the store would
+ * draw them a second time on top of the ones now baked into the page.
+ */
+async function flattenAnnotations(): Promise<void> {
+  const session = activeSession;
+  if (!session?.bytes || !viewer.hasDocument) return;
+  if (annotations.count === 0) {
+    setStatus(i18n.t('flattenNone'), true);
+    return;
+  }
+
+  const confirmed = await showConfirmDialog(i18n, {
+    title: i18n.resolveCommand(CMD.FlattenAnnotations)?.title ?? '展平注释',
+    message: i18n.t('flattenConfirm').replace('{n}', String(annotations.count)),
+    confirm: i18n.t('pageOpsConfirm'),
+    cancel: i18n.t('printCancel'),
+  });
+  if (!confirmed) return;
+
+  setStatus(i18n.t('loading'));
+  try {
+    const source = new Uint8Array(session.bytes);
+    const doc = await PdfDocument.parse(source);
+    const records = await doc.pages();
+
+    const byPage = new Map<number, FlattenInput[]>();
+    for (const item of annotations.all) {
+      const list = byPage.get(item.page);
+      const input: FlattenInput = {
+        kind: item.kind,
+        color: item.color,
+        rect: item.rect,
+        rects: item.rects,
+        strokes: item.strokes,
+        note: item.note,
+        fontSize: item.fontSize,
+        strokeWidth: item.strokeWidth,
+        strokeDash: item.strokeDash,
+      };
+      if (list) list.push(input);
+      else byPage.set(item.page, [input]);
+    }
+
+    const unit = measureUnit;
+    const plan = records.map((record, index) => ({
+      sourceIndex: index,
+      flatten: flattenPage(
+        byPage.get(index + 1) ?? [],
+        record.mediaBox,
+        readUserUnit({ userUnit: record.userUnit }),
+        unit,
+      ),
+    }));
+
+    const result = await rewritePdf(source, plan);
+    annotations.load([], false);
+    await replaceDocumentBytes(result.bytes);
+    setStatus(i18n.t('flattenDone'));
+  } catch (error) {
+    setStatus(`${i18n.t('flattenFailed')}: ${String((error as Error)?.message ?? error)}`, true);
+  }
+}
+
 registerCommand(CMD.SaveIntoPdf, () => void saveIntoPdf());
 registerCommand(CMD.Undo, undoAnnotation);
 registerCommand(CMD.Redo, redoAnnotation);

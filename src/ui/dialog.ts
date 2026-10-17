@@ -271,3 +271,79 @@ export function showPromptDialog(
     input.select();
   });
 }
+
+/**
+ * A yes-or-no question.
+ *
+ * Deliberately not implemented on top of `showPromptDialog`: that one exists to collect a
+ * value and would put a text field in front of a question that has only two answers.
+ */
+export function showConfirmDialog(
+  i18n: I18n,
+  options: { title: string; message: string; confirm: string; cancel: string },
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const box = document.createElement('div');
+    box.className = 'modal modal-narrow modal-confirm-box';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+
+    const title = document.createElement('div');
+    title.className = 'modal-title';
+    title.textContent = options.title;
+
+    const body = document.createElement('div');
+    body.className = 'modal-body';
+    const message = document.createElement('p');
+    message.className = 'modal-message';
+    message.textContent = options.message;
+    body.appendChild(message);
+
+    const footer = document.createElement('div');
+    footer.className = 'modal-footer';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn modal-cancel';
+    cancel.textContent = options.cancel;
+    const confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.className = 'btn primary modal-confirm';
+    confirm.textContent = options.confirm;
+    footer.append(cancel, confirm);
+
+    box.append(title, body, footer);
+    overlay.appendChild(box);
+
+    let settled = false;
+    const finish = (value: boolean): void => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      resolve(value);
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        finish(false);
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        finish(true);
+      }
+    };
+
+    confirm.addEventListener('click', () => finish(true));
+    cancel.addEventListener('click', () => finish(false));
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) finish(false);
+    });
+    document.addEventListener('keydown', onKey, true);
+
+    document.body.appendChild(overlay);
+    void i18n;
+    confirm.focus();
+  });
+}

@@ -53,6 +53,15 @@ export interface PagePlan {
   mediaBox?: [number, number, number, number];
   /** Inserted pages only: PDF content-stream operators to draw. */
   content?: string;
+  /**
+   * Operators that flatten this page's annotations into what the page draws.
+   *
+   * Appended as an extra content stream rather than merged into the existing ones:
+   * copying those through untouched is the only way to be sure a page that drew
+   * correctly before still draws correctly afterwards. `/Annots` is dropped in the same
+   * step, because an annotation that also appears in the content draws twice.
+   */
+  flatten?: { operators: string; needsFont: boolean };
 }
 
 export interface RewriteResult {
@@ -142,7 +151,7 @@ export async function rewritePdf(
     const pageNumber = reused ? allocate() : source.num;
     if (!reused) pageOwner.set(source.num, pageNumber);
 
-    const text = await pageObjectText(doc, source, entry, pagesObjectNumber);
+    const text = await pageObjectText(doc, source, entry, pagesObjectNumber, allocate, appended);
     if (reused) {
       appended.push({ num: pageNumber, text: `${pageNumber} 0 obj\n${text}\nendobj\n` });
     } else {
@@ -235,6 +244,8 @@ async function pageObjectText(
   source: PageRecord,
   plan: PagePlan,
   parentNumber: number,
+  allocate: () => number,
+  appended: Array<{ num: number; text: string }>,
 ): Promise<string> {
   // Start from the parsed dictionary so keys this writer does not model survive.
   const parsed = (await doc.getObject(source.num)) as PdfDict | null;
@@ -255,6 +266,33 @@ async function pageObjectText(
     entries.set('CropBox', array(plan.cropBox.map((value) => num(value))));
   } else if (!entries.has('CropBox') && source.cropBox) {
     entries.set('CropBox', array(source.cropBox.map((value) => num(value))));
+  }
+
+  // Flattening: append the marks as their own content stream and drop the annotations.
+  if (plan.flatten && plan.flatten.operators !== '') {
+    const contentNumber = allocate();
+    const body = plan.flatten.operators;
+    appended.push({
+      num: contentNumber,
+      text: `${contentNumber} 0 obj\n<< /Length ${body.length} >>\nstream\n${body}\nendstream\nendobj\n`,
+    });
+    const existing = entries.get('Contents');
+    const added = ref(contentNumber, 0);
+    if (!existing) entries.set('Contents', added);
+    else if (existing.kind === 'array') entries.set('Contents', array([...existing.value, added]));
+    else entries.set('Contents', array([existing, added]));
+    entries.delete('Annots');
+
+    if (plan.flatten.needsFont) {
+      const fontNumber = allocate();
+      appended.push({
+        num: fontNumber,
+        text:
+          `${fontNumber} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica ` +
+          `/Encoding /WinAnsiEncoding >>\nendobj\n`,
+      });
+      entries.set('Resources', await resourcesWithFont(doc, entries.get('Resources') ?? source.resources, fontNumber));
+    }
   }
 
   const rotation =
@@ -281,6 +319,38 @@ async function pageObjectText(
   }
 
   return serializeValue({ kind: 'dict', value: entries });
+}
+
+/**
+ * A copy of a page's resources with `/Helv` added.
+ *
+ * The copy matters: resources are routinely shared between pages, so mutating the
+ * original would give every page a font that only one of them uses. Copying the font
+ * dictionary as well keeps the names the existing content streams already reference.
+ */
+async function resourcesWithFont(
+  doc: PdfDocument,
+  value: PdfValue | undefined | null,
+  fontNumber: number,
+): Promise<PdfValue> {
+  const direct = await resolveDict(doc, value);
+  const entries = new Map<string, PdfValue>(direct ? direct.value : []);
+  const fonts = await resolveDict(doc, entries.get('Font'));
+  const fontEntries = new Map<string, PdfValue>(fonts ? fonts.value : []);
+  fontEntries.set('Helv', ref(fontNumber, 0));
+  entries.set('Font', { kind: 'dict', value: fontEntries });
+  return { kind: 'dict', value: entries };
+}
+
+/** A dictionary, following one reference if that is what the value is. */
+async function resolveDict(doc: PdfDocument, value: PdfValue | undefined | null): Promise<PdfDict | null> {
+  if (!value) return null;
+  if (value.kind === 'dict') return value;
+  if (value.kind === 'ref') {
+    const target = await doc.getObject(value.num);
+    if (target && target.kind === 'dict') return target;
+  }
+  return null;
 }
 
 function normaliseRotation(value: number): number {

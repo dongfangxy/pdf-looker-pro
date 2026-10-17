@@ -49,6 +49,8 @@ export interface PageRecord {
   rotate: number;
   /** Inherited `/Resources`, materialised for the same reason as the crop box. */
   resources: PdfValue | null;
+  /** Inherited `/UserUnit`, the size of a unit in points. Almost always 1. */
+  userUnit: number;
   /** Existing `/Annots` value, if the page has one. */
   annots: PdfValue | null;
 }
@@ -216,7 +218,7 @@ export class PdfDocument {
     const seen = new Set<number>();
     await this.walkPages(
       pagesRef,
-      { mediaBox: null, cropBox: null, resources: null, rotate: 0 },
+      { mediaBox: null, cropBox: null, resources: null, userUnit: 1, rotate: 0 },
       found,
       seen,
       0,
@@ -230,6 +232,7 @@ export class PdfDocument {
       mediaBox: [number, number, number, number] | null;
       cropBox: [number, number, number, number] | null;
       resources: PdfValue | null;
+      userUnit: number;
       rotate: number;
     },
     out: PageRecord[],
@@ -247,6 +250,7 @@ export class PdfDocument {
     const mediaBox = readBox(node, 'MediaBox') ?? inherited.mediaBox;
     const cropBox = readBox(node, 'CropBox') ?? inherited.cropBox;
     const resources = node.value.get('Resources') ?? inherited.resources;
+    const userUnit = numberEntry(node, 'UserUnit', inherited.userUnit);
     const rotate = numberEntry(node, 'Rotate', inherited.rotate);
 
     const typeValue = node.value.get('Type');
@@ -262,6 +266,7 @@ export class PdfDocument {
           cropBox,
           rotate: materialisedRotation(rotate),
           resources,
+          userUnit: userUnit > 0 ? userUnit : 1,
           annots: node.value.get('Annots') ?? null,
         });
       }
@@ -269,7 +274,7 @@ export class PdfDocument {
     }
 
     for (const kid of kids?.value ?? []) {
-      await this.walkPages(kid, { mediaBox, cropBox, resources, rotate }, out, seen, depth + 1);
+      await this.walkPages(kid, { mediaBox, cropBox, resources, userUnit, rotate }, out, seen, depth + 1);
     }
   }
 

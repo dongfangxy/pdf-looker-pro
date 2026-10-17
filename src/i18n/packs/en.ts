@@ -86,6 +86,7 @@ export const en: LanguagePack = {
     [CMD.NewBlankDocument]: { title: 'New blank document...', tooltip: 'Create a document of blank pages', status: 'New blank document', short: 'New' },
     [CMD.NewFromImage]: { title: 'New from image...', tooltip: 'Turn an image into a one-page PDF', status: 'New from image', short: 'From image' },
     [CMD.ReorderPages]: { title: 'Reorder pages...', tooltip: 'Rearrange the pages into a given order', status: 'Reorder pages', short: 'Reorder' },
+    [CMD.FlattenAnnotations]: { title: 'Flatten annotations...', tooltip: 'Draw the annotations into the page and remove them', status: 'Flatten annotations', short: 'Flatten' },
     [CMD.Undo]: { title: 'Undo', tooltip: 'Undo the last annotation change (Ctrl+Z)', status: 'Undone', short: 'Undo' },
     [CMD.Redo]: { title: 'Redo', tooltip: 'Redo the undone change (Ctrl+Shift+Z)', status: 'Redone', short: 'Redo' },
     [CMD.SaveIntoPdf]: { title: 'Save', tooltip: 'Save the annotations into the PDF (Ctrl+S)', status: 'Saved', short: 'Save' },
@@ -292,6 +293,11 @@ export const en: LanguagePack = {
     reorderHint: 'List the pages in the order you want, e.g. 3,1,2,4-6',
     reorderLabel: 'Page order',
     reorderDone: 'Pages reordered',
+
+    flattenConfirm: 'This draws {n} annotations into the page, after which they can no longer be edited separately. Continue?',
+    flattenDone: 'Annotations flattened into the page',
+    flattenNone: 'This document has no annotations',
+    flattenFailed: 'Flattening failed',
 
     langSwitchFail: 'That language pack is unavailable',
     commandsBound: 'Commands bound',

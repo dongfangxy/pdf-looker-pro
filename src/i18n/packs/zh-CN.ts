@@ -81,6 +81,7 @@ export const zhCN: LanguagePack = {
     [CMD.NewBlankDocument]: { title: '新建空白文档...', tooltip: '创建一个只有空白页的新文档', status: '新建空白文档', short: '新建' },
     [CMD.NewFromImage]: { title: '从图像创建...', tooltip: '把一张图片变成单页 PDF', status: '从图像创建', short: '从图像' },
     [CMD.ReorderPages]: { title: '页面重排...', tooltip: '按指定顺序重新排列页面', status: '页面重排', short: '重排' },
+    [CMD.FlattenAnnotations]: { title: '展平注释...', tooltip: '把注释画进页面内容并移除批注', status: '展平注释', short: '展平' },
     [CMD.Undo]: { title: '撤销', tooltip: '撤销上一步批注操作 (Ctrl+Z)', status: '已撤销', short: '撤销' },
     [CMD.Redo]: { title: '重做', tooltip: '重做被撤销的操作 (Ctrl+Shift+Z)', status: '已重做', short: '重做' },
     [CMD.SaveIntoPdf]: { title: '保存', tooltip: '把批注保存进 PDF 文件（Ctrl+S）', status: '已保存', short: '保存' },
@@ -287,6 +288,11 @@ export const zhCN: LanguagePack = {
     reorderHint: '按想要的顺序填写页码，例如 3,1,2,4-6',
     reorderLabel: '页面顺序',
     reorderDone: '页面已重排',
+
+    flattenConfirm: '将把 {n} 条注释画进页面内容，之后不能再单独编辑。继续吗？',
+    flattenDone: '注释已展平到页面内容',
+    flattenNone: '当前文档没有注释',
+    flattenFailed: '展平失败',
 
     langSwitchFail: '该语言包不可用',
 
