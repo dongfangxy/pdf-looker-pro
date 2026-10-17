@@ -11,8 +11,31 @@ import type { PdfDocument, PdfPage } from './pdf-document.js';
 import { baseSize, displaySize, releaseCanvas, renderPage, type Size } from './page-renderer.js';
 import { PageTextLayer } from './text-layer.js';
 
-export type ZoomMode = 'custom' | 'fit-width' | 'fit-page';
-export type ViewMode = 'continuous' | 'single' | 'spread';
+export type ZoomMode =
+  | 'custom'
+  | 'fit-width'
+  | 'fit-page'
+  /** One PDF point per CSS pixel: 100%, with no fitting. */
+  | 'actual'
+  /**
+   * Fits the page's *content* to the window rather than its paper edge.
+   *
+   * A scan or a form usually carries white margins; fit-width leaves those margins
+   * as wasted screen, and fit-visible removes them. The content box is measured by
+   * rendering the page small once and scanning for non-white pixels, so this costs
+   * one cheap render per page and is cached thereafter.
+   */
+  | 'fit-visible';
+
+export type ViewMode =
+  /** Every page stacked, scrolling continuously. */
+  | 'continuous'
+  /** Only the current page. */
+  | 'single'
+  /** Only the current pair of facing pages. */
+  | 'spread'
+  /** Every pair of facing pages, scrolling continuously. */
+  | 'spread-continuous';
 
 const MIN_SCALE = 0.1;
 const MAX_SCALE = 8;
@@ -75,6 +98,25 @@ interface RawOutlineNode {
   items?: unknown;
 }
 
+/** Padding kept inside the window when fitting content, so text never touches the edge. */
+const FIT_VISIBLE_PAD = 12;
+
+/** A page's non-white bounding box, in unrotated page units. */
+export interface ContentBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** One entry of the back/forward view history. */
+interface ViewSnapshot {
+  page: number;
+  scale: number;
+  zoomMode: ZoomMode;
+  rotation: number;
+  scrollTop: number;
+}
 function normaliseRotation(value: number): number {
   const wrapped = Math.round(value / 90) * 90;
   return ((wrapped % 360) + 360) % 360;
@@ -95,6 +137,13 @@ export class Viewer {
   private viewMode: ViewMode = 'continuous';
   private currentPage = 0;
   private textSelection = true;
+  /** Measured content boxes, in unrotated page units; null means "no content". */
+  private readonly boundsCache = new Map<number, ContentBox | null>();
+  /** Visited views, oldest first, for the back/forward navigation. */
+  private readonly viewHistory: ViewSnapshot[] = [];
+  private viewHistoryIndex = -1;
+  /** Set while a history entry is being restored, so it is not recorded again. */
+  private restoringView = false;
 
   private readonly observer: IntersectionObserver;
   private readonly resizeObserver: ResizeObserver;
@@ -215,6 +264,10 @@ export class Viewer {
 
     this.setTextSelection(this.textSelection);
     this.gotoPage(typeof restore?.page === 'number' ? restore.page : 1);
+    // Seed the history with the opening view so the first 上一视图 has a target.
+    this.viewHistory.length = 0;
+    this.viewHistoryIndex = -1;
+    this.recordView();
   }
 
   destroy(): void {
@@ -235,6 +288,9 @@ export class Viewer {
     this.slots = [];
     this.queue.length = 0;
     this.pageCache.clear();
+    this.boundsCache.clear();
+    this.viewHistory.length = 0;
+    this.viewHistoryIndex = -1;
     this.pagesEl.replaceChildren();
     this.doc = null;
     this.currentPage = 0;
@@ -270,6 +326,7 @@ export class Viewer {
   setZoomMode(mode: ZoomMode): void {
     this.zoomMode = mode;
     this.applyZoomMode(true);
+    this.recordView();
   }
 
   setScale(scale: number): void {
@@ -278,6 +335,7 @@ export class Viewer {
     this.scale = clamped;
     this.zoomMode = 'custom';
     this.relayout();
+    this.recordView();
   }
 
   zoomIn(): void {
@@ -296,6 +354,7 @@ export class Viewer {
       this.relayout();
     }
     this.emitState();
+    this.recordView();
   }
 
   private applyZoomMode(force = false): void {
@@ -311,7 +370,19 @@ export class Viewer {
     const rotated = displaySize(reference.base, 1, this.rotation);
 
     // Facing pages share the width, so the fit is computed against half of it.
-    const columns = this.viewMode === 'spread' ? 2 : 1;
+    const columns = this.viewMode === 'spread' || this.viewMode === 'spread-continuous' ? 2 : 1;
+
+    if (this.zoomMode === 'actual') {
+      // 100% is a fixed scale, not a fit: nothing to measure.
+      this.scale = 1;
+      this.relayout();
+      return;
+    }
+
+    if (this.zoomMode === 'fit-visible') {
+      this.applyFitVisible(force, columns, availW);
+      return;
+    }
 
     let next = this.scale;
     if (this.zoomMode === 'fit-width') {
@@ -329,6 +400,99 @@ export class Viewer {
     }
     this.scale = next;
     this.relayout();
+  }
+
+  /**
+   * Fits the current page's content, measured on demand.
+   *
+   * Measurement renders the page at a low scale and scans the pixels, so it is
+   * asynchronous. The result is only applied if the reader has not moved on in the
+   * meantime, which keeps a fast page-flip from snapping the zoom to a stale page.
+   */
+  private applyFitVisible(force: boolean, columns: number, availW: number): void {
+    const pageNumber = this.currentPage || 1;
+    void this.contentBounds(pageNumber).then((box) => {
+      if (this.destroyed) return;
+      if (this.zoomMode !== 'fit-visible') return;
+      if ((this.currentPage || 1) !== pageNumber) return;
+
+      const slot = this.slots[pageNumber - 1];
+      if (!slot) return;
+      // A page with no content has nothing to fit; fall back to the paper width.
+      const contentWidth = box ? box.width : 0;
+      const paper = displaySize(slot.base, 1, this.rotation);
+      const sideways = this.rotation === 90 || this.rotation === 270;
+      const width = box
+        ? (sideways ? box.height : box.width)
+        : paper.width;
+      const usable = Math.max(40, availW - FIT_VISIBLE_PAD);
+      const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, usable / columns / Math.max(width, 1)));
+      void contentWidth;
+
+      if (!force && Math.abs(next - this.scale) / Math.max(this.scale, 1e-6) < 0.005) {
+        this.emitZoom();
+        return;
+      }
+      this.scale = next;
+      this.relayout();
+    });
+  }
+
+  /** The measured content box of a page, for callers that need to reason about it. */
+  async contentBox(pageNumber: number): Promise<ContentBox | null> {
+    return this.contentBounds(pageNumber);
+  }
+
+  /** Measures the non-white bounding box of a page, in unrotated page units. */
+  private async contentBounds(pageNumber: number): Promise<ContentBox | null> {
+    if (this.boundsCache.has(pageNumber)) return this.boundsCache.get(pageNumber) ?? null;
+    let result: ContentBox | null = null;
+    try {
+      const page = await this.getPage(pageNumber);
+      // 0.5 is enough to find margins and cheap enough to do on demand.
+      const probe = 0.5;
+      const viewport = page.getViewport({ scale: probe });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.ceil(viewport.width));
+      canvas.height = Math.max(1, Math.ceil(viewport.height));
+      const ctx = canvas.getContext('2d', { alpha: false });
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvas, viewport, transform: [1, 0, 0, 1, 0, 0] }).promise;
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let minX = canvas.width;
+        let minY = canvas.height;
+        let maxX = -1;
+        let maxY = -1;
+        for (let y = 0; y < canvas.height; y++) {
+          const row = y * canvas.width;
+          for (let x = 0; x < canvas.width; x++) {
+            const i = (row + x) * 4;
+            // 250 rather than 255: anti-aliased glyph edges are not pure white.
+            if (data[i]! < 250 || data[i + 1]! < 250 || data[i + 2]! < 250) {
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+        }
+        if (maxX >= minX && maxY >= minY) {
+          result = {
+            x: minX / probe,
+            y: minY / probe,
+            width: (maxX - minX + 1) / probe,
+            height: (maxY - minY + 1) / probe,
+          };
+        }
+        releaseCanvas(canvas);
+      }
+    } catch {
+      result = null;
+    }
+    this.boundsCache.set(pageNumber, result);
+    return result;
   }
 
   // ---------------------------------------------------------------- layout
@@ -501,6 +665,7 @@ export class Viewer {
     if (this.zoomMode !== 'custom') this.applyZoomMode(true);
     this.scrollEl.scrollTop = slot.element.offsetTop - (this.scrollEl.clientHeight - slot.element.clientHeight) / 2;
     this.emitState();
+    this.recordView();
   }
 
   nextPage(): void {
@@ -536,6 +701,86 @@ export class Viewer {
     const changed = candidate !== this.currentPage;
     this.setCurrentPage(candidate);
     if (changed) this.emitState();
+  }
+
+  // ---------------------------------------------------------------- view history
+
+  /**
+   * Records the current view, so 上一视图 / 下一视图 can return to it.
+   *
+   * Consecutive identical views collapse: scrolling inside a page must not fill the
+   * history with entries the reader cannot tell apart.
+   */
+  private recordView(): void {
+    if (this.restoringView || !this.slots.length) return;
+    const snapshot = this.captureView();
+    const current = this.viewHistory[this.viewHistoryIndex];
+    if (current && current.page === snapshot.page && current.scale === snapshot.scale &&
+        current.zoomMode === snapshot.zoomMode && current.rotation === snapshot.rotation &&
+        Math.abs(current.scrollTop - snapshot.scrollTop) < 40) {
+      // Same view, only a small scroll: keep the entry, update its offset.
+      current.scrollTop = snapshot.scrollTop;
+      return;
+    }
+    // Dropping forward entries is what makes this a branch, not a ring.
+    this.viewHistory.length = this.viewHistoryIndex + 1;
+    this.viewHistory.push(snapshot);
+    if (this.viewHistory.length > 60) this.viewHistory.shift();
+    this.viewHistoryIndex = this.viewHistory.length - 1;
+  }
+
+  private captureView(): ViewSnapshot {
+    return {
+      page: this.currentPage || 1,
+      scale: this.scale,
+      zoomMode: this.zoomMode,
+      rotation: this.rotation,
+      scrollTop: this.scrollEl.scrollTop,
+    };
+  }
+
+  private restoreView(snapshot: ViewSnapshot): void {
+    this.restoringView = true;
+    try {
+      this.zoomMode = snapshot.zoomMode;
+      this.scale = snapshot.scale;
+      this.rotation = snapshot.rotation;
+      this.setCurrentPage(snapshot.page);
+      this.relayout();
+      const slot = this.slots[snapshot.page - 1];
+      if (slot) this.scrollEl.scrollTop = slot.element.offsetTop - (this.scrollEl.clientHeight - slot.element.clientHeight) / 2;
+      this.emitState();
+    } finally {
+      this.restoringView = false;
+    }
+  }
+
+  get canGoBack(): boolean {
+    return this.viewHistoryIndex > 0;
+  }
+
+  get canGoForward(): boolean {
+    return this.viewHistoryIndex >= 0 && this.viewHistoryIndex < this.viewHistory.length - 1;
+  }
+
+  /** Steps back through visited views. Returns false when there is nowhere to go. */
+  previousView(): boolean {
+    if (!this.canGoBack) return false;
+    this.viewHistoryIndex--;
+    const snapshot = this.viewHistory[this.viewHistoryIndex];
+    if (!snapshot) return false;
+    this.restoreView(snapshot);
+    return true;
+  }
+
+  /** Steps forward again after `previousView`. */
+  nextView(): boolean {
+    if (!this.canGoForward) return false;
+    this.viewHistoryIndex++;
+    const snapshot = this.viewHistory[this.viewHistoryIndex];
+    if (!snapshot) return false;
+    this.restoreView(snapshot);
+    return true;
   }
 
   // ---------------------------------------------------------------- state
@@ -579,8 +824,11 @@ export class Viewer {
     this.viewMode = mode;
     this.pagesEl.classList.toggle('mode-single', mode === 'single');
     this.pagesEl.classList.toggle('mode-spread', mode === 'spread');
+    this.pagesEl.classList.toggle('mode-spread-continuous', mode === 'spread-continuous');
     this.pagesEl.dataset['mode'] = mode;
     if (mode !== 'continuous' && this.zoomMode === 'fit-width') this.zoomMode = 'fit-page';
+    // The visible pair changes with the mode, so it has to be recomputed.
+    this.markCurrentPage(this.currentPage || 1);
     this.applyZoomMode(options.refit === true);
   }
 
@@ -590,8 +838,12 @@ export class Viewer {
 
   /** Marks the page the reader is on, which single-page mode uses to pick a page. */
   markCurrentPage(pageNumber: number): void {
+    // In facing mode a "view" is a pair, and the pair starts on an odd page so that
+    // two pages are always on screen together.
+    const pairStart = pageNumber - ((pageNumber - 1) % 2);
     for (const slot of this.slots) {
       slot.element.classList.toggle('current', slot.pageNumber === pageNumber);
+      slot.element.classList.toggle('in-pair', slot.pageNumber === pairStart || slot.pageNumber === pairStart + 1);
     }
   }
 

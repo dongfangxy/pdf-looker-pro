@@ -267,8 +267,9 @@ console.log('\n=== 7. 快捷键 ===');
   await page.click('#tool-select');
   await page.keyboard.press('Control+0');
   await page.waitForTimeout(400);
-  const mode = await page.evaluate(() => document.querySelector('#btn-fit-width').classList.contains('primary'));
-  check('Ctrl+0 切回适应宽度', mode === true);
+  // Ctrl+0 is actual size, not fit-width: assert the reported zoom, not a button class.
+  const zoomLabel = (await page.textContent('#zoom-label'))?.trim() ?? '';
+  check('Ctrl+0 回到实际大小', zoomLabel === '100%', zoomLabel);
 
   await page.keyboard.press('End');
   await page.waitForTimeout(900);

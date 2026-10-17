@@ -5,7 +5,15 @@
  * than by file name or title, so nothing identifying is written to storage and the
  * same file reopened from a different path still resumes.
  */
-export type ZoomModeName = 'custom' | 'fit-width' | 'fit-page';
+import type { ZoomMode } from './viewer.js';
+
+/**
+ * Persisted zoom mode.
+ *
+ * Aliased rather than repeated: a second copy of this union drifted out of step the
+ * moment a fit mode was added, and the compiler is the right place to notice that.
+ */
+export type ZoomModeName = ZoomMode;
 
 export interface PersistedState {
   page: number;
@@ -60,6 +68,26 @@ function writeStore(store: Store): void {
   }
 }
 
+/**
+ * Every zoom mode, as a lookup table.
+ *
+ * Typed as `Record<ZoomMode, true>` rather than as a hand-written list: adding a mode
+ * to the union without adding it here is a compile error, which is the only way to
+ * stop the runtime validator drifting away from the type. A stored mode the
+ * validator rejects discards the whole saved position.
+ */
+const ZOOM_MODES: Record<ZoomMode, true> = {
+  custom: true,
+  'fit-width': true,
+  'fit-page': true,
+  actual: true,
+  'fit-visible': true,
+};
+
+function isZoomMode(value: unknown): value is ZoomMode {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(ZOOM_MODES, value);
+}
+
 function isState(value: unknown): value is PersistedState {
   if (value === null || typeof value !== 'object') return false;
   const s = value as Partial<PersistedState>;
@@ -68,7 +96,7 @@ function isState(value: unknown): value is PersistedState {
     Number.isFinite(s.page) &&
     typeof s.scale === 'number' &&
     Number.isFinite(s.scale) &&
-    (s.zoomMode === 'custom' || s.zoomMode === 'fit-width' || s.zoomMode === 'fit-page') &&
+    isZoomMode(s.zoomMode) &&
     typeof s.rotation === 'number' &&
     Number.isFinite(s.rotation)
   );

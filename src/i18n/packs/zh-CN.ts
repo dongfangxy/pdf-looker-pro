@@ -64,6 +64,13 @@ export const zhCN: LanguagePack = {
     [CMD.ViewFullscreen]: { title: '全屏', tooltip: '进入或退出全屏', status: '切换全屏显示', short: '全屏' },
     [CMD.DocProperties]: { title: '文档属性', tooltip: '查看文档信息', status: '显示文档属性', short: '属性' },
 
+    [CMD.ZoomActual]: { title: '实际大小', tooltip: '按 100% 显示 (Ctrl+0)', status: '实际大小', short: '实际' },
+    [CMD.FitVisible]: { title: '符合可见区域', tooltip: '把页面内容（不含白边）充满窗口', status: '符合可见区域', short: '可见' },
+    [CMD.ZoomTo]: { title: '缩放至...', tooltip: '输入缩放百分比', status: '缩放至', short: '缩放' },
+    [CMD.ViewSpreadContinuous]: { title: '连续 - 对开', tooltip: '所有页面按对开连续滚动', status: '连续 - 对开', short: '连续对开' },
+    [CMD.PrevView]: { title: '上一视图', tooltip: '回到上一个视图', status: '上一视图', short: '上一视图' },
+    [CMD.NextView]: { title: '下一视图', tooltip: '前进到下一个视图', status: '下一视图', short: '下一视图' },
+    [CMD.GoToPage]: { title: '转到页面', tooltip: '输入页码并跳转', status: '转到页面', short: '转到' },
     [CMD.Undo]: { title: '撤销', tooltip: '撤销上一步批注操作 (Ctrl+Z)', status: '已撤销', short: '撤销' },
     [CMD.Redo]: { title: '重做', tooltip: '重做被撤销的操作 (Ctrl+Shift+Z)', status: '已重做', short: '重做' },
     [CMD.SaveIntoPdf]: { title: '保存', tooltip: '把批注保存进 PDF 文件（Ctrl+S）', status: '已保存', short: '保存' },
@@ -208,6 +215,13 @@ export const zhCN: LanguagePack = {
     redoEmpty: '没有可重做的操作',
     showSidebar: '显示侧栏',
     showSidebarHint: '打开时显示缩略图、大纲与批注面板',
+
+    zoomPercent: '缩放比例',
+    pageNumber: '页码',
+    zoomInvalid: '请输入有效的缩放比例',
+    pageInvalid: '页码超出文档范围',
+    noPrevView: '没有更早的视图',
+    noNextView: '没有更晚的视图',
 
     langSwitchFail: '该语言包不可用',
 

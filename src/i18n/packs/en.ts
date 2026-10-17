@@ -69,6 +69,13 @@ export const en: LanguagePack = {
     [CMD.ViewFullscreen]: { title: 'Full screen', tooltip: 'Enter or leave full screen', status: 'Toggle full screen', short: 'Full screen' },
     [CMD.DocProperties]: { title: 'Document properties', tooltip: 'View document information', status: 'Show document properties', short: 'Properties' },
 
+    [CMD.ZoomActual]: { title: 'Actual size', tooltip: 'Show at 100% (Ctrl+0)', status: 'Actual size', short: 'Actual' },
+    [CMD.FitVisible]: { title: 'Fit visible', tooltip: 'Fill the window with the page content, without its margins', status: 'Fit visible', short: 'Visible' },
+    [CMD.ZoomTo]: { title: 'Zoom to...', tooltip: 'Enter a zoom percentage', status: 'Zoom to', short: 'Zoom' },
+    [CMD.ViewSpreadContinuous]: { title: 'Continuous - Facing', tooltip: 'Every page in facing pairs, scrolling continuously', status: 'Continuous facing', short: 'Cont. facing' },
+    [CMD.PrevView]: { title: 'Previous view', tooltip: 'Return to the previous view', status: 'Previous view', short: 'Back' },
+    [CMD.NextView]: { title: 'Next view', tooltip: 'Go forward to the next view', status: 'Next view', short: 'Forward' },
+    [CMD.GoToPage]: { title: 'Go to page', tooltip: 'Jump to a page number', status: 'Go to page', short: 'Go to' },
     [CMD.Undo]: { title: 'Undo', tooltip: 'Undo the last annotation change (Ctrl+Z)', status: 'Undone', short: 'Undo' },
     [CMD.Redo]: { title: 'Redo', tooltip: 'Redo the undone change (Ctrl+Shift+Z)', status: 'Redone', short: 'Redo' },
     [CMD.SaveIntoPdf]: { title: 'Save', tooltip: 'Save the annotations into the PDF (Ctrl+S)', status: 'Saved', short: 'Save' },
@@ -213,6 +220,13 @@ export const en: LanguagePack = {
     redoEmpty: 'Nothing to redo',
     showSidebar: 'Show the sidebar',
     showSidebarHint: 'Show thumbnails, outline and annotations when a document opens',
+
+    zoomPercent: 'Zoom level',
+    pageNumber: 'Page number',
+    zoomInvalid: 'Enter a valid zoom percentage',
+    pageInvalid: 'That page number is outside the document',
+    noPrevView: 'No earlier view',
+    noNextView: 'No later view',
 
     langSwitchFail: 'That language pack is unavailable',
     commandsBound: 'Commands bound',

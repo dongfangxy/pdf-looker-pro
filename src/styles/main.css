@@ -709,17 +709,31 @@ html, body {
 .pages.mode-single,
 .pages.mode-spread { align-items: center; }
 
-/* Single-page mode shows only the current page; facing mode pairs pages in a row. */
+/* Single-page mode shows only the current page. */
 .pages.mode-single .page { display: none; }
 .pages.mode-single .page.current { display: block; }
+
+/* Facing mode shows exactly the current pair, nothing else. The pair starts on an odd
+   page, so two pages are always side by side rather than one page and a gap. */
 .pages.mode-spread {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-content: center;
+  gap: 10px;
+}
+.pages.mode-spread .page { display: none; margin: 0; }
+.pages.mode-spread .page.in-pair { display: block; }
+
+/* Continuous facing: every pair, wrapping two per row and scrolling normally. */
+.pages.mode-spread-continuous {
   flex-direction: row;
   flex-wrap: wrap;
   justify-content: center;
   align-content: flex-start;
   gap: 10px;
 }
-.pages.mode-spread .page { margin: 0; }
+.pages.mode-spread-continuous .page { margin: 0; }
 
 /* ---------- responsive toolbar ---------- */
 /* The toolbar wraps onto extra rows instead of scrolling buttons out of reach,

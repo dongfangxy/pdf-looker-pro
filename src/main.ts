@@ -21,7 +21,7 @@ import { AnnotationPanel } from './sidebar/annotations.js';
 import { ToolManager, type ToolName } from './tools/tool-manager.js';
 import { FindIndex } from './tools/find.js';
 import { documentKey, loadProgress, saveProgress } from './viewer/progress.js';
-import { showPackDialog, showPromptDialog } from './ui/dialog.js';
+import { showInputDialog, showPackDialog, showPromptDialog } from './ui/dialog.js';
 import { showSettingsDialog, type SettingsField } from './ui/settings-dialog.js';
 import { showAboutDialog } from './ui/about-dialog.js';
 import { ENGINE_LICENCE, ENGINE_NAME, LICENCE_NOTE, PRODUCT_AUTHOR, PRODUCT_DESCRIPTION, PRODUCT_EMAIL, PRODUCT_NAME, PRODUCT_TAGLINE, PRODUCT_VERSION } from './product.js';
@@ -72,6 +72,8 @@ const ui = {
   zoomLabel: mustFind<HTMLSpanElement>('zoom-label'),
   fitWidth: mustFind<HTMLButtonElement>('btn-fit-width'),
   fitPage: mustFind<HTMLButtonElement>('btn-fit-page'),
+  fitVisible: mustFind<HTMLButtonElement>('btn-fit-visible'),
+  zoomActual: mustFind<HTMLButtonElement>('btn-zoom-actual'),
   rotate: mustFind<HTMLButtonElement>('btn-rotate'),
   findOpen: mustFind<HTMLButtonElement>('btn-find'),
   props: mustFind<HTMLButtonElement>('btn-props'),
@@ -137,6 +139,7 @@ const ui = {
   viewContinuous: mustFind<HTMLButtonElement>('view-continuous'),
   viewSingle: mustFind<HTMLButtonElement>('view-single'),
   viewSpread: mustFind<HTMLButtonElement>('view-spread'),
+  viewSpreadCont: mustFind<HTMLButtonElement>('view-spread-cont'),
   viewFullscreen: mustFind<HTMLButtonElement>('view-fullscreen'),
 
   findBar: mustFind<HTMLDivElement>('find-bar'),
@@ -171,6 +174,10 @@ if (debugFlag === 'res') {
 if (debugFlag === 'p5') {
   const hooks = window as unknown as Record<string, unknown>;
   hooks['__store'] = () => annotations;
+  // Late-bound: the viewer is constructed further down, after the debug hooks.
+  Object.defineProperty(window, '__viewer', { get: () => viewer });
+  hooks['__setViewMode'] = (mode: ViewMode) => setViewMode(mode);
+  hooks['__contentBox'] = (page: number) => viewer.contentBox(page);
   hooks['__addRect'] = (page: number, x: number, y: number, w: number, h: number, kind: AnnotKind = 'rect') => {
     annotations.add({ page, kind, color: DEFAULT_COLORS[kind], rect: { x, y, w, h } });
   };
@@ -1479,8 +1486,45 @@ function userUnitFor(page: number): number {
   return 1;
 }
 
+/** Asks for a zoom percentage and applies it. */
+async function zoomToDialog(): Promise<void> {
+  const current = Math.round(viewer.getState().scale * 100);
+  const value = await showInputDialog(i18n, {
+    title: i18n.resolveCommand(CMD.ZoomTo)?.title ?? '缩放至',
+    label: i18n.t('zoomPercent'),
+    initial: String(current),
+    suffix: '%',
+    numeric: true,
+  });
+  if (value === null) return;
+  const percent = Number(value.replace('%', '').trim());
+  if (!Number.isFinite(percent) || percent <= 0) {
+    setStatus(i18n.t('zoomInvalid'), true);
+    return;
+  }
+  viewer.setScale(percent / 100);
+}
+
+/** Asks for a page number and jumps to it. */
+async function goToPageDialog(): Promise<void> {
+  const value = await showInputDialog(i18n, {
+    title: i18n.resolveCommand(CMD.GoToPage)?.title ?? '转到页面',
+    label: i18n.t('pageNumber'),
+    initial: String(viewer.page),
+    numeric: true,
+  });
+  if (value === null) return;
+  const page = Number.parseInt(value.trim(), 10);
+  if (!Number.isFinite(page) || page < 1 || page > viewer.pageCount) {
+    setStatus(i18n.t('pageInvalid'), true);
+    return;
+  }
+  viewer.gotoPage(page);
+}
+
 function setViewMode(mode: ViewMode): void {
   viewMode = mode;
+  const facing = mode === 'spread' || mode === 'spread-continuous';
   if (viewer.hasDocument) {
     viewer.setViewMode(mode);
     viewer.markCurrentPage(viewer.page);
@@ -1488,10 +1532,13 @@ function setViewMode(mode: ViewMode): void {
     ui.pages.dataset['mode'] = mode;
     ui.pages.classList.toggle('mode-single', mode === 'single');
     ui.pages.classList.toggle('mode-spread', mode === 'spread');
+    ui.pages.classList.toggle('mode-spread-continuous', mode === 'spread-continuous');
   }
   ui.viewContinuous.classList.toggle('active', mode === 'continuous');
   ui.viewSingle.classList.toggle('active', mode === 'single');
   ui.viewSpread.classList.toggle('active', mode === 'spread');
+  ui.viewSpreadCont.classList.toggle('active', mode === 'spread-continuous');
+  void facing;
   annotationLayer.refreshAll();
   void desktop?.settings.patch({ viewMode: mode });
 }
@@ -1627,6 +1674,14 @@ function buildMenuDescriptor(): MenuDescriptor {
           command(CMD.ViewContinuous),
           command(CMD.ViewSingle),
           command(CMD.ViewSpread),
+command(CMD.ViewSpreadContinuous),
+command(CMD.ZoomActual, 'CmdOrCtrl+0'),
+command(CMD.FitVisible),
+command(CMD.ZoomTo),
+{ type: 'separator' },
+command(CMD.PrevView, 'Alt+Left'),
+command(CMD.NextView, 'Alt+Right'),
+command(CMD.GoToPage, 'CmdOrCtrl+G'),
           { type: 'separator' },
           command(CMD.ZoomIn, 'CmdOrCtrl+Plus'),
           command(CMD.ZoomOut, 'CmdOrCtrl+-'),
@@ -1957,6 +2012,16 @@ bindCommand(CMD.ZoomIn, ui.zoomIn, { onClick: () => viewer.zoomIn() });
 bindCommand(CMD.ZoomOut, ui.zoomOut, { onClick: () => viewer.zoomOut() });
 bindCommand(CMD.FitWidth, ui.fitWidth, { onClick: () => viewer.setZoomMode('fit-width') });
 bindCommand(CMD.FitPage, ui.fitPage, { onClick: () => viewer.setZoomMode('fit-page') });
+bindCommand(CMD.FitVisible, ui.fitVisible, { onClick: () => viewer.setZoomMode('fit-visible') });
+bindCommand(CMD.ZoomActual, ui.zoomActual, { onClick: () => viewer.setZoomMode('actual') });
+registerCommand(CMD.ZoomTo, () => void zoomToDialog());
+registerCommand(CMD.GoToPage, () => void goToPageDialog());
+registerCommand(CMD.PrevView, () => {
+  if (!viewer.previousView()) setStatus(i18n.t('noPrevView'));
+});
+registerCommand(CMD.NextView, () => {
+  if (!viewer.nextView()) setStatus(i18n.t('noNextView'));
+});
 bindCommand(CMD.Rotate, ui.rotate, {
   onClick: () => {
     viewer.rotate();
@@ -2025,7 +2090,13 @@ bindCommand(CMD.AnnotExportPage, ui.exportPage, { onClick: () => void exportCurr
 bindCommand(CMD.ViewContinuous, ui.viewContinuous, { onClick: () => setViewMode('continuous') });
 bindCommand(CMD.ViewSingle, ui.viewSingle, { onClick: () => setViewMode('single') });
 bindCommand(CMD.ViewSpread, ui.viewSpread, { onClick: () => setViewMode('spread') });
+bindCommand(CMD.ViewSpreadContinuous, ui.viewSpreadCont, { onClick: () => setViewMode('spread-continuous') });
 bindCommand(CMD.ViewFullscreen, ui.viewFullscreen, { onClick: () => void toggleFullscreen() });
+
+// The percentage readout is the natural place to click to type an exact zoom.
+ui.zoomLabel.addEventListener('click', () => void zoomToDialog());
+ui.zoomLabel.classList.add('clickable');
+ui.zoomLabel.title = i18n.resolveCommand(CMD.ZoomTo)?.tooltip ?? '缩放至';
 
 // Menu-only commands.
 registerCommand(CMD.FirstPage, () => viewer.gotoPage(1));
@@ -2246,30 +2317,52 @@ ui.fileInput.addEventListener('change', () => {
 // by the menu accelerator before it reaches the page, so only one path runs; synthetic
 // key events in the verification suites never reach the menu, so this is what they
 // exercise.
-window.addEventListener('keydown', (event) => {
-    if (!event.ctrlKey && !event.metaKey) return;
-    // A text field owns its own clipboard and undo behaviour.
+  window.addEventListener('keydown', (event) => {
+    // A text field owns its own clipboard, undo and cursor behaviour.
     const target = event.target as HTMLElement | null;
     const typing =
       target instanceof HTMLInputElement ||
       target instanceof HTMLTextAreaElement ||
       target?.isContentEditable === true;
+    if (typing) return;
+
     const key = event.key.toLowerCase();
-    if (key === 'z' && !typing) {
+
+    // Alt+Left / Alt+Right step through visited views. This chord uses neither Ctrl
+    // nor Meta, so it has to be handled before the modifier guard below.
+    if (event.altKey && !event.ctrlKey && !event.metaKey) {
+      if (key === 'arrowleft') {
+        event.preventDefault();
+        if (!viewer.previousView()) setStatus(i18n.t('noPrevView'));
+        return;
+      }
+      if (key === 'arrowright') {
+        event.preventDefault();
+        if (!viewer.nextView()) setStatus(i18n.t('noNextView'));
+        return;
+      }
+    }
+
+    if (!event.ctrlKey && !event.metaKey) return;
+
+    if (key === 'z') {
       event.preventDefault();
       if (event.shiftKey) redoAnnotation();
       else undoAnnotation();
       return;
     }
-    if (key === 's' && !typing) {
+    if (key === 's') {
       event.preventDefault();
       if (event.shiftKey) void saveAnnotations();
       else void saveIntoPdf();
       return;
     }
-    if (key === 'f' && !typing) {
+    // Ctrl+0 lives in the shortcuts block below, which already owns the zoom chords;
+    // keeping a second binding here would fight it for the same key.
+    if (key === 'g') {
       event.preventDefault();
-      openFindBar();
+      void goToPageDialog();
+      return;
     }
   });
 
@@ -2342,7 +2435,8 @@ window.addEventListener('keydown', (e) => {
   }
   if (mod && e.key === '0') {
     e.preventDefault();
-    viewer.setZoomMode('fit-width');
+    // Ctrl+0 is actual size, matching the original: 100%, not the window width.
+    viewer.setZoomMode('actual');
     return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey) return;

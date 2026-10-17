@@ -89,6 +89,107 @@ export function showPackDialog(i18n: I18n, dialogId: number | string, options: D
 }
 
 /**
+ * A one-line text or number prompt.
+ *
+ * `showPromptDialog` is a multi-line editor, which is wrong for a page number or a
+ * zoom percentage: Enter should submit, not insert a newline.
+ */
+export interface InputDialogOptions {
+  title: string;
+  label: string;
+  initial?: string;
+  confirm?: string;
+  cancel?: string;
+  /** Restricts the field to digits and a decimal point, and focuses it for typing. */
+  numeric?: boolean;
+  suffix?: string;
+}
+
+export function showInputDialog(i18n: I18n, options: InputDialogOptions): Promise<string | null> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const box = document.createElement('div');
+    box.className = 'modal modal-narrow';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+
+    const title = document.createElement('div');
+    title.className = 'modal-title';
+    title.textContent = options.title;
+    box.appendChild(title);
+
+    const body = document.createElement('div');
+    body.className = 'modal-body';
+    const label = document.createElement('div');
+    label.className = 'modal-line';
+    label.textContent = options.label;
+    body.appendChild(label);
+
+    const row = document.createElement('div');
+    row.className = 'modal-row';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'modal-input';
+    input.value = options.initial ?? '';
+    if (options.numeric) input.inputMode = 'decimal';
+    row.appendChild(input);
+    if (options.suffix) {
+      const suffix = document.createElement('span');
+      suffix.className = 'modal-suffix';
+      suffix.textContent = options.suffix;
+      row.appendChild(suffix);
+    }
+    body.appendChild(row);
+    box.appendChild(body);
+
+    const footer = document.createElement('div');
+    footer.className = 'modal-footer';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn modal-cancel';
+    cancel.textContent = options.cancel ?? i18n.t('unsavedStay');
+    const confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.className = 'btn primary modal-confirm';
+    confirm.textContent = options.confirm ?? '确定';
+    footer.append(cancel, confirm);
+    box.appendChild(footer);
+    overlay.appendChild(box);
+
+    let settled = false;
+    const finish = (value: string | null): void => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      resolve(value);
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        finish(null);
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        finish(input.value);
+      }
+    };
+
+    confirm.addEventListener('click', () => finish(input.value));
+    cancel.addEventListener('click', () => finish(null));
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) finish(null);
+    });
+    document.addEventListener('keydown', onKey, true);
+
+    document.body.appendChild(overlay);
+    input.focus();
+    input.select();
+  });
+}
+
+/**
  * A single-field prompt.
  *
  * Electron does not implement `window.prompt`, so the application supplies its own

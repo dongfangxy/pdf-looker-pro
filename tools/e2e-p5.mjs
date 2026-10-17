@@ -218,7 +218,8 @@ console.log('\n=== 5. 视图模式 ===');
     zoom: document.querySelector('#zoom-label')?.textContent ?? '',
   }));
   check('双页模式标记生效', spread.cls.includes('mode-spread'), spread.cls);
-  check('双页模式恢复显示全部页', spread.visible === 24, `可见=${spread.visible}`);
+  // Facing mode now shows exactly the current pair; 连续-对开 is the mode that shows all.
+  check('双页模式只显示当前一组', spread.visible === 2, `可见=${spread.visible}`);
   check('双页模式自动改用适应页面', spread.zoom.length > 0, `zoom=${spread.zoom}`);
 
   await clickCommand(page, '#view-continuous');
