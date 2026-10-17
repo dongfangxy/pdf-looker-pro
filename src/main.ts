@@ -35,6 +35,7 @@ import { writeAnnotations, type PdfAnnotationInput } from './pdf/annotate.js';
 import { readAnnotations } from './pdf/import.js';
 import { flattenPage, type FlattenInput } from './pdf/flatten.js';
 import { readUserUnit } from './tools/measure.js';
+import { createPdf, type NewPage } from './pdf/create.js';
 import { createBlankPdf, createPdfFromJpeg } from './pdf/create.js';
 import { rewritePdf, type PagePlan } from './pdf/rewrite.js';
 import { History } from './annotations/history.js';
@@ -113,6 +114,7 @@ const ui = {
   newBlank: mustFind<HTMLButtonElement>('btn-new-blank'),
   newImage: mustFind<HTMLButtonElement>('btn-new-image'),
   reorderPages: mustFind<HTMLButtonElement>('btn-reorder-pages'),
+  summary: mustFind<HTMLButtonElement>('btn-summary'),
   flatten: mustFind<HTMLButtonElement>('btn-flatten'),
   annotStamp: mustFind<HTMLButtonElement>('annot-stamp'),
   stampPick: mustFind<HTMLButtonElement>('btn-stamp-pick'),
@@ -2167,6 +2169,7 @@ function buildMenuDescriptor(): MenuDescriptor {
           command(CMD.RotatePages),
           command(CMD.InsertBlankPage),
           command(CMD.ExtractPages),
+          command(CMD.SummaryAnnotations),
           command(CMD.FlattenAnnotations),
           command(CMD.CropPages),
           command(CMD.Print, 'CmdOrCtrl+P'),
@@ -2635,6 +2638,7 @@ bindCommand(CMD.InsertBlankPage, ui.insertPage, { onClick: () => void runPageOpe
 bindCommand(CMD.ExtractPages, ui.extractPages, { onClick: () => void runPageOperation('extract') });
 bindCommand(CMD.NewBlankDocument, ui.newBlank, { onClick: () => void newBlankDocument() });
 bindCommand(CMD.NewFromImage, ui.newImage, { onClick: () => void newFromImage() });
+bindCommand(CMD.SummaryAnnotations, ui.summary, { onClick: () => void summarizeAnnotations() });
 bindCommand(CMD.FlattenAnnotations, ui.flatten, { onClick: () => void flattenAnnotations() });
 bindCommand(CMD.ReorderPages, ui.reorderPages, { onClick: () => void reorderPages() });
 bindCommand(CMD.CropPages, ui.cropPages, { onClick: () => void runPageOperation('crop') });
@@ -2726,6 +2730,114 @@ async function pickStamp(): Promise<void> {
   if (chosen === null || !isStampId(chosen)) return;
   currentStamp = chosen;
   setStatus(`${i18n.t('stampNow')}：${i18n.t(STAMP_LABEL_KEYS[currentStamp])}`);
+}
+
+/** Resolution the summary renders at. 2 means 144 DPI, the same as printing. */
+const SUMMARY_SCALE = 2;
+
+/** Base64 from a data URL, as bytes. */
+function dataUrlBytes(dataUrl: string): Uint8Array {
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * Builds a document holding the annotated pages, marks and all.
+ *
+ * Rendered rather than transcribed. A list of comments in text would need a font that
+ * covers whatever the reader typed, and embedding one is a large amount of machinery
+ * for a summary; a rendered page carries the marks and the words in them, in any
+ * language, with no font of its own.
+ */
+async function summarizeAnnotations(): Promise<void> {
+  const session = activeSession;
+  if (!session?.bytes || !viewer.hasDocument) return;
+  if (annotations.count === 0) {
+    setStatus(i18n.t('flattenNone'), true);
+    return;
+  }
+
+  setStatus(i18n.t('summaryPreparing'));
+  try {
+    const source = new Uint8Array(session.bytes);
+    const doc = await PdfDocument.parse(source);
+    const records = await doc.pages();
+
+    const byPage = new Map<number, FlattenInput[]>();
+    for (const item of annotations.all) {
+      const list = byPage.get(item.page);
+      const input: FlattenInput = {
+        kind: item.kind,
+        color: item.color,
+        rect: item.rect,
+        rects: item.rects,
+        strokes: item.strokes,
+        note: item.note,
+        fontSize: item.fontSize,
+        strokeWidth: item.strokeWidth,
+        stampLabel: item.stampId ? STAMP_PDF_NAMES[item.stampId] : item.note,
+        strokeDash: item.strokeDash,
+      };
+      if (list) list.push(input);
+      else byPage.set(item.page, [input]);
+    }
+
+    const pages = [...byPage.keys()].sort((a, b) => a - b);
+    if (pages.length === 0) throw new Error(i18n.t('flattenNone'));
+
+    // Flatten first, so the render below shows the marks as part of the page.
+    const flattened = await rewritePdf(
+      source,
+      records.map((record, index) => ({
+        sourceIndex: index,
+        flatten: flattenPage(
+          byPage.get(index + 1) ?? [],
+          record.mediaBox,
+          readUserUnit({ userUnit: record.userUnit }),
+          measureUnit,
+        ),
+      })),
+    );
+
+    const opened = await openFromArrayBuffer(
+      flattened.bytes.slice().buffer as ArrayBuffer,
+      'summary-source.pdf',
+    );
+
+    const sheets: NewPage[] = [];
+    try {
+      for (const pageNumber of pages) {
+        const page = await opened.doc.getPage(pageNumber);
+        const base = page.getViewport({ scale: 1 });
+        const render = page.getViewport({ scale: SUMMARY_SCALE });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.ceil(render.width));
+        canvas.height = Math.max(1, Math.ceil(render.height));
+        const context = canvas.getContext('2d', { alpha: false });
+        if (!context) throw new Error('2D 上下文不可用');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvas, viewport: render, transform: [1, 0, 0, 1, 0, 0] }).promise;
+        const jpeg = dataUrlBytes(canvas.toDataURL('image/jpeg', 0.9));
+        sheets.push({
+          box: [0, 0, Math.round(base.width), Math.round(base.height)],
+          jpeg: { bytes: jpeg, width: canvas.width, height: canvas.height },
+        });
+      }
+    } finally {
+      await opened.doc.destroy();
+    }
+
+    const summary = createPdf(sheets);
+    const stem = (session.name || 'document').replace(/\.pdf$/i, '');
+    await openDocument(summary.buffer as ArrayBuffer, `${stem}-summary.pdf`, null);
+    setStatus(`${i18n.t('summaryDone')}：${sheets.length} 页`);
+  } catch (error) {
+    setStatus(`${i18n.t('summaryFailed')}: ${String((error as Error)?.message ?? error)}`, true);
+  }
 }
 
 registerCommand(CMD.SaveIntoPdf, () => void saveIntoPdf());

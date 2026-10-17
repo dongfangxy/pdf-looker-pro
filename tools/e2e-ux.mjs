@@ -111,7 +111,11 @@ console.log('\n=== 2. 更多菜单：工具栏定制 ===');
     `left 差 ${menu.anchorGap}px, 内收=${menu.clampedInside}`,
   );
   check('列出所有可定制按钮且每项有勾选框', menu.names.length >= 30 && menu.ticks === menu.names.length, `${menu.names.length} 项 / ${menu.ticks} 勾选框`);
-  check('包含形状与文档命令', ['矩形框', '椭圆', '箭头', '文本框', '标注气泡', '文档属性', '关于'].every((n) => menu.names.includes(n)), menu.names.slice(0, 5).join(' / '));
+  // The names follow the original product: the text box is its typewriter, the bubble its
+  // callout text. Renamed here so the list keeps proving that tools are present, not that
+  // they kept an older label.
+  check('包含形状与文档命令', ['矩形框', '椭圆', '箭头', '打字机', '对应文本', '文档属性', '关于'].every((n) => menu.names.includes(n)), menu.names.slice(0, 5).join(' / '));
+  check('包含新增的批注与页面命令', ['图章', '展平注释...', '总括注释...', '删除页面...', '页面重排...'].every((n) => menu.names.includes(n)), '');
   check('包含视图与测量', ['连续滚动', '单页', '双页', '全屏', '距离测量', '周长测量', '面积测量'].every((n) => menu.names.includes(n)), '');
   check('按分组排列', menu.sections.length >= 6, menu.sections.slice(0, 5).join(' / '));
 
