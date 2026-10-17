@@ -296,6 +296,7 @@ export const en: LanguagePack = {
     reorderLabel: 'Page order',
     reorderDone: 'Pages reordered',
 
+    annotReply: 'Add a reply',
     annotStamp: 'Stamp',
     stampApproved: 'Approved',
     stampConfidential: 'Confidential',

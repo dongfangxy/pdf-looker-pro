@@ -15,6 +15,9 @@ export interface AnnotationPanelOptions {
   emptyText(): string;
   countText(count: number): string;
   kindLabel(kind: AnnotKind): string;
+  /** Add a message to the annotation's thread. */
+  onReply(id: string, text: string): void;
+  replyLabel(): string;
 }
 
 const KIND_MARK: Record<AnnotKind, string> = {
@@ -71,6 +74,11 @@ export class AnnotationPanel {
       this.options.onDelete(id);
       return;
     }
+    if (target?.closest('[data-action="reply"]')) {
+      const text = window.prompt(this.options.replyLabel());
+      if (text && text.trim() !== '') this.options.onReply(id, text.trim());
+      return;
+    }
     const item = this.store.byId(id);
     if (!item) return;
     this.selectedId = id;
@@ -122,15 +130,17 @@ export class AnnotationPanel {
 
         const body = document.createElement('div');
         body.className = 'annot-body';
-        // The author is what makes a comment attributable when several people annotate the
-    // same file, so it belongs on the row rather than buried in the detail.
-    if (item.author) {
-      const author = document.createElement('div');
-      author.className = 'annot-author';
-      author.textContent = item.author;
-      row.appendChild(author);
-    }
-    const label = document.createElement('div');
+
+        // The author is what makes a comment attributable when several people annotate
+        // the same file, so it belongs on the row rather than buried in the detail.
+        if (item.author) {
+          const author = document.createElement('div');
+          author.className = 'annot-author';
+          author.textContent = item.author;
+          body.appendChild(author);
+        }
+
+        const label = document.createElement('div');
         label.className = 'annot-kind';
         label.textContent = this.options.kindLabel(item.kind);
         body.appendChild(label);
@@ -143,6 +153,29 @@ export class AnnotationPanel {
           body.appendChild(text);
         }
         row.appendChild(body);
+
+        // The thread sits under the annotation it belongs to, indented, so a long
+        // conversation does not push the annotation itself off the row.
+        for (const reply of item.replies ?? []) {
+          const node = document.createElement('div');
+          node.className = 'annot-reply';
+          const who = document.createElement('span');
+          who.className = 'annot-reply-author';
+          who.textContent = reply.author || '—';
+          const what = document.createElement('span');
+          what.className = 'annot-reply-text';
+          what.textContent = reply.text;
+          node.append(who, what);
+          body.appendChild(node);
+        }
+
+        const reply = document.createElement('button');
+        reply.type = 'button';
+        reply.className = 'annot-reply-add';
+        reply.dataset['action'] = 'reply';
+        reply.textContent = '+';
+        reply.title = this.options.replyLabel();
+        row.appendChild(reply);
 
         const del = document.createElement('button');
         del.type = 'button';

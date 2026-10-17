@@ -226,6 +226,7 @@ if (debugFlag === 'p5') {
       note: item.note ?? null,
       author: item.author ?? null,
       stampName: item.stampName ?? null,
+      replies: (item.replies ?? []).map((r) => r.text),
       fontSize: item.fontSize ?? null,
       strokeWidth: item.strokeWidth ?? null,
       strokeDash: item.strokeDash ?? null,
@@ -692,6 +693,15 @@ const annotPanel = new AnnotationPanel(ui.annotations, annotations, {
   emptyText: () => i18n.t('annotEmpty'),
   countText: (count) => `${count} ${i18n.t('annotCount')}`,
   kindLabel: (kind) => i18n.resolveCommand(kindCommandId(kind))?.title ?? kind,
+  replyLabel: () => i18n.t('annotReply'),
+  onReply: (id, text) => {
+    const item = annotations.byId(id);
+    if (!item) return;
+    annotations.update(id, {
+      replies: [...(item.replies ?? []), { author: annotations.defaultAuthor, text, at: Date.now() }],
+    });
+    history.record(snapshotAnnotations());
+  },
 });
 
 /**
@@ -1552,6 +1562,7 @@ async function exportAnnotationsJson(): Promise<void> {
         strokeWidth: item.strokeWidth,
         strokeDash: item.strokeDash,
         stampName: item.stampId ? STAMP_PDF_NAMES[item.stampId] : undefined,
+        replies: (item.replies ?? []).map((reply) => ({ author: reply.author, text: reply.text })),
         author: item.author,
       };
       if (list) list.push(input);
@@ -1653,6 +1664,7 @@ async function exportAnnotationsJson(): Promise<void> {
         color: item.color,
         // Keep the file's own author rather than the reader's name from the settings.
         author: item.author ?? '',
+        replies: item.replies,
       };
       if (item.rect) input.rect = item.rect;
       if (item.rects) input.rects = item.rects;

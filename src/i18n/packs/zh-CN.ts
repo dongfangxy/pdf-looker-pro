@@ -291,6 +291,7 @@ export const zhCN: LanguagePack = {
     reorderLabel: '页面顺序',
     reorderDone: '页面已重排',
 
+    annotReply: '添加回复',
     annotStamp: '图章',
     stampApproved: '已批准',
     stampConfidential: '机密',

@@ -38,6 +38,18 @@ export const ANNOT_KINDS = [
 ] as const;
 export type AnnotKind = (typeof ANNOT_KINDS)[number];
 
+/**
+ * One message in an annotation's thread.
+ *
+ * `at` is kept so a thread keeps its order after a reload; the store sorts by page and
+ * creation time, which says nothing about the order within one conversation.
+ */
+export interface AnnotReply {
+  author: string;
+  text: string;
+  at: number;
+}
+
 /** A rectangle in unrotated page space at scale 1. */
 /**
  * The standard stamps.
@@ -88,6 +100,21 @@ export const STAMP_LABEL_KEYS: Record<StampId, string> = {
   final: 'stampFinal',
 };
 
+/** Replies read back from storage, dropping anything that is not a complete message. */
+function parseReplies(value: unknown): AnnotReply[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: AnnotReply[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue;
+    const author = typeof (entry as { author?: unknown }).author === 'string' ? (entry as { author: string }).author : '';
+    const text = typeof (entry as { text?: unknown }).text === 'string' ? (entry as { text: string }).text : '';
+    const at = typeof (entry as { at?: unknown }).at === 'number' ? (entry as { at: number }).at : 0;
+    if (text === '') continue;
+    out.push({ author, text, at });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 export function isStampId(value: unknown): value is StampId {
   return typeof value === 'string' && (STAMP_IDS as readonly string[]).includes(value);
 }
@@ -124,6 +151,8 @@ export interface Annotation {
   note?: string;
   /** Which standard stamp this is, for `stamp` annotations. */
   stampId?: StampId | undefined;
+  /** Replies in the annotation's thread, oldest first. */
+  replies?: AnnotReply[] | undefined;
   /**
    * Text size in **page-space units**, so a text box keeps its proportions when
    * the view is zoomed instead of drifting out of its own frame.
@@ -322,6 +351,7 @@ export class AnnotationStore {
         ...(annotation.strokeDash !== undefined ? { strokeDash: annotation.strokeDash } : {}),
         ...(annotation.autoFit !== undefined ? { autoFit: annotation.autoFit } : {}),
         ...(annotation.stampId !== undefined ? { stampId: annotation.stampId } : {}),
+        ...(annotation.replies && annotation.replies.length > 0 ? { replies: annotation.replies } : {}),
     };
     this.items.push(full);
     this.items.sort((a, b) => a.page - b.page || a.createdAt - b.createdAt);
@@ -330,7 +360,15 @@ export class AnnotationStore {
     return full;
   }
 
-  update(id: string, patch: Partial<Pick<Annotation, 'color' | 'note' | 'strokeWidth' | 'strokeDash' | 'fontSize' | 'autoFit'>>): boolean {
+  update(
+    id: string,
+    patch: Partial<
+      Pick<
+        Annotation,
+        'color' | 'note' | 'strokeWidth' | 'strokeDash' | 'fontSize' | 'autoFit' | 'replies'
+      >
+    >,
+  ): boolean {
     const item = this.items.find((a) => a.id === id);
     if (!item) return false;
     if (patch.color !== undefined) item.color = patch.color;
@@ -339,6 +377,7 @@ export class AnnotationStore {
     if (patch.strokeDash !== undefined) item.strokeDash = patch.strokeDash;
     if (patch.fontSize !== undefined) item.fontSize = patch.fontSize;
     if (patch.autoFit !== undefined) item.autoFit = patch.autoFit;
+    if (patch.replies !== undefined) item.replies = patch.replies;
     item.updatedAt = Date.now();
     this.dirtyFlag = true;
     this.emit();
@@ -521,6 +560,7 @@ export function parseAnnotations(input: unknown, pageCount?: number): Validation
       updatedAt: isFiniteNumber(a['updatedAt']) ? a['updatedAt'] : now,
       author: typeof a['author'] === 'string' ? a['author'] : 'unknown',
     stampId: isStampId(a['stampId']) ? a['stampId'] : undefined,
+    replies: parseReplies(a['replies']),
       ...(rects ? { rects } : {}),
       ...(typeof a['text'] === 'string' ? { text: a['text'] } : {}),
       ...(strokes ? { strokes } : {}),

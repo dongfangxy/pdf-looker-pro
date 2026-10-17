@@ -9,7 +9,7 @@
  * Anything this application does not understand — links, form widgets, popups — is left
  * alone.
  */
-import type { AnnotKind, AnnotPoint, AnnotRect } from '../annotations/model.js';
+import type { AnnotKind, AnnotPoint, AnnotRect, AnnotReply } from '../annotations/model.js';
 import { PdfDocument, type PageRecord } from './document.js';
 import type { PdfDict, PdfName, PdfValue } from './syntax.js';
 import { decodeText } from './syntax.js';
@@ -29,6 +29,8 @@ export interface ImportedAnnotation {
   author?: string;
   /** Standard stamp name, from `/Name`. */
   stampName?: string;
+  /** Replies reconstructed from annotations whose `/IRT` points here. */
+  replies?: AnnotReply[];
 }
 
 /** Subtypes this application knows how to reconstruct. */
@@ -129,13 +131,38 @@ async function readPageAnnotations(
   const mapper = new InverseMapper(page.mediaBox);
   const out: ImportedAnnotation[] = [];
 
+  /** Object number to annotation, so `/IRT` can be resolved after the pass. */
+  const byNumber = new Map<number, ImportedAnnotation>();
+  const pending: Array<{ item: ImportedAnnotation; irt: number }> = [];
+
   for (const entry of list.value) {
     const annotation = await doc.dict(entry);
     if (!annotation) continue;
     const subtype = nameOf(annotation.value.get('Subtype'));
     if (!subtype || !KNOWN_SUBTYPES.has(subtype)) continue;
     const item = convert(annotation, subtype, mapper, pageNumber);
-    if (item) out.push(item);
+    if (!item) continue;
+
+    const irt = annotation.value.get('IRT');
+    if (irt?.kind === 'ref') {
+      pending.push({ item, irt: irt.num });
+      continue;
+    }
+    if (entry.kind === 'ref') byNumber.set(entry.num, item);
+    out.push(item);
+  }
+
+  // Replies are attached after every annotation is known, because `/IRT` may point at
+  // a parent that appears later in the list.
+  for (const { item, irt } of pending) {
+    const parent = byNumber.get(irt);
+    if (!parent) {
+      // A reply whose parent is outside this page is still worth showing.
+      out.push(item);
+      continue;
+    }
+    const list = parent.replies ?? (parent.replies = []);
+    list.push({ author: item.author ?? '', text: item.note ?? '', at: 0 });
   }
   return out;
 }
