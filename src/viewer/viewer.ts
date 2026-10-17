@@ -117,6 +117,15 @@ interface ViewSnapshot {
   rotation: number;
   scrollTop: number;
 }
+/** True for pdf.js's cancellation errors, which are routine rather than failures. */
+function isAbort(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const name = (error as { name?: unknown }).name;
+  if (name === 'AbortException') return true;
+  const message = (error as { message?: unknown }).message;
+  return typeof message === 'string' && /cancelled|canceled/i.test(message);
+}
+
 function normaliseRotation(value: number): number {
   const wrapped = Math.round(value / 90) * 90;
   return ((wrapped % 360) + 360) % 360;
@@ -569,7 +578,13 @@ export class Viewer {
       slot.text.setInteractive(this.textSelection);
       this.cb.onPageRendered?.(slot.pageNumber);
     } catch (err) {
-      this.cb.onStatus?.(`第 ${slot.pageNumber} 页渲染失败: ${String(err)}`, true);
+      // pdf.js aborts a text-layer task whenever the page is re-entered or scrolled
+      // away mid-render. That is ordinary churn, not a failure: reporting it would put
+      // an error in the status bar every time a reader scrolls quickly, and the page is
+      // queued again by the code below anyway.
+      if (!isAbort(err)) {
+        this.cb.onStatus?.(`第 ${slot.pageNumber} 页渲染失败: ${String(err)}`, true);
+      }
     } finally {
       slot.rendering = false;
       this.activeRenders--;

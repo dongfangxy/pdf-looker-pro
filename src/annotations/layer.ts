@@ -569,6 +569,10 @@ export class AnnotationLayer {
     const hit = this.store.hitTest(page, point);
     if (hit) {
       this.select(hit.id);
+      // A click selects the annotation under any tool, but the *gesture* belongs to
+      // whichever tool is active. Swallowing pointerdown here is what broke the
+      // snapshot and hand drags whenever they started on top of an annotation.
+      if (tool !== 'pointer' && !annotationKindForTool(tool)) return;
       if (tool === 'pointer') this.beginDrag(hit, page, point, event);
       event.preventDefault();
       event.stopPropagation();
