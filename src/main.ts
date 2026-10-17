@@ -45,6 +45,7 @@ import { flattenPage, type FlattenInput } from './pdf/flatten.js';
 import { readUserUnit } from './tools/measure.js';
 import { createPdf, type NewPage } from './pdf/create.js';
 import { createBlankPdf, createPdfFromJpeg } from './pdf/create.js';
+import { mergePdf } from './pdf/merge.js';
 import { rewritePdf, type PagePlan } from './pdf/rewrite.js';
 import { History } from './annotations/history.js';
 import { PdfDocument } from './pdf/document.js';
@@ -128,6 +129,7 @@ const ui = {
   summary: mustFind<HTMLButtonElement>('btn-summary'),
   searchFolder: mustFind<HTMLButtonElement>('btn-search-folder'),
   saveSearch: mustFind<HTMLButtonElement>('btn-save-search'),
+  merge: mustFind<HTMLButtonElement>('btn-merge'),
   flatten: mustFind<HTMLButtonElement>('btn-flatten'),
   annotStamp: mustFind<HTMLButtonElement>('annot-stamp'),
   stampPick: mustFind<HTMLButtonElement>('btn-stamp-pick'),
@@ -296,6 +298,14 @@ if (debugFlag === 'p5') {
   };
 
   /** Rewrites the open document from a page plan; used by the verification suites. */
+  /** Merges extra bytes into the open document; used by the verification suite. */
+  hooks['__mergePdf'] = async (extra: Uint8Array, at: number) => {
+    const source = activeSession?.bytes;
+    if (!source) throw new Error('当前文档没有原始数据');
+    const result = await mergePdf(new Uint8Array(source), new Uint8Array(extra), at);
+    return { pageCount: result.pageCount, inserted: result.inserted, bytes: Array.from(result.bytes) };
+  };
+
   hooks['__rewritePdf'] = async (plan: PagePlan[]) => {
     const source = activeSession?.bytes;
     if (!source) throw new Error('当前文档没有原始数据');
@@ -2276,6 +2286,7 @@ function buildMenuDescriptor(): MenuDescriptor {
           command(CMD.RotatePages),
           command(CMD.InsertBlankPage),
           command(CMD.ExtractPages),
+          command(CMD.MergeDocument),
           command(CMD.SaveSearch),
           command(CMD.SearchFolder),
           command(CMD.SummaryAnnotations),
@@ -2863,6 +2874,7 @@ bindCommand(CMD.InsertBlankPage, ui.insertPage, { onClick: () => void runPageOpe
 bindCommand(CMD.ExtractPages, ui.extractPages, { onClick: () => void runPageOperation('extract') });
 bindCommand(CMD.NewBlankDocument, ui.newBlank, { onClick: () => void newBlankDocument() });
 bindCommand(CMD.NewFromImage, ui.newImage, { onClick: () => void newFromImage() });
+bindCommand(CMD.MergeDocument, ui.merge, { onClick: () => void mergeDocument() });
 bindCommand(CMD.SaveSearch, ui.saveSearch, { onClick: () => void saveCurrentSearch() });
 bindCommand(CMD.SearchFolder, ui.searchFolder, { onClick: () => void searchFolder() });
 bindCommand(CMD.SummaryAnnotations, ui.summary, { onClick: () => void summarizeAnnotations() });
@@ -3067,6 +3079,85 @@ async function summarizeAnnotations(): Promise<void> {
   } catch (error) {
     setStatus(`${i18n.t('summaryFailed')}: ${String((error as Error)?.message ?? error)}`, true);
   }
+}
+
+/**
+ * Asks for a PDF, through the desktop dialogue when there is one.
+ *
+ * The browser falls back to a file input for the same reason the image path does: the
+ * feature should not be a desktop-only one when the same bytes are one input away.
+ */
+async function pickPdfFile(): Promise<{ name: string; bytes: Uint8Array } | null> {
+  if (desktop) {
+    const picked = await desktop.openFileDialog();
+    if (!picked || !picked.bytes) return null;
+    return { name: picked.name, bytes: picked.bytes };
+  }
+  const file = await new Promise<File | null>((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/pdf,.pdf';
+    input.style.display = 'none';
+    let settled = false;
+    const finish = (value: File | null): void => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(value);
+    };
+    input.addEventListener('change', () => finish(input.files?.[0] ?? null));
+    input.addEventListener('cancel', () => finish(null));
+    document.body.appendChild(input);
+    input.click();
+  });
+  if (!file) return null;
+  return { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) };
+}
+
+/**
+ * Brings every page of another PDF into this one.
+ *
+ * The pages are inserted, not appended to the end: a reader merging a cover sheet wants
+ * it in front, and making them extract-and-reorder afterwards would be the same work
+ * this feature exists to save.
+ */
+async function mergeDocument(): Promise<void> {
+  const session = activeSession;
+  if (!session?.bytes || !viewer.hasDocument) return;
+  const picked = await pickPdfFile();
+  if (!picked) return;
+
+  const total = viewer.pageCount;
+  const where = await showInputDialog(i18n, {
+    title: i18n.resolveCommand(CMD.MergeDocument)?.title ?? '合并文档',
+    label: i18n.t('mergeAt').replace('{n}', String(total + 1)),
+    initial: String(viewer.page),
+    numeric: true,
+    confirm: i18n.t('pageOpsConfirm'),
+    cancel: i18n.t('printCancel'),
+  });
+  if (where === null) return;
+  const at = Number.parseInt(where.trim(), 10);
+
+  setStatus(i18n.t('loading'));
+  let result;
+  try {
+    result = await mergePdf(new Uint8Array(session.bytes), new Uint8Array(picked.bytes), Number.isFinite(at) ? at : total + 1);
+  } catch (error) {
+    setStatus(`${i18n.t('mergeFailed')}: ${String((error as Error)?.message ?? error)}`, true);
+    return;
+  }
+
+  // Base pages from the insertion point onwards have moved down by the inserted count.
+  const sourceToTarget = new Map<number, number>();
+  const position = Math.max(1, Math.min(total + 1, Number.isFinite(at) ? at : total + 1));
+  for (let page = 1; page <= total; page++) {
+    sourceToTarget.set(page, page < position ? page : page + result.inserted);
+  }
+  const dropped = remapAnnotations(sourceToTarget);
+  await replaceDocumentBytes(result.bytes);
+  const note = i18n.t('mergeDone').replace('{n}', String(result.inserted));
+  setStatus(dropped > 0 ? `${note}（${dropped} 条批注随页面删除）` : note);
 }
 
 registerCommand(CMD.SaveIntoPdf, () => void saveIntoPdf());

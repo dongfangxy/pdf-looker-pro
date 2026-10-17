@@ -82,6 +82,8 @@ use for reading and marking up papers.
 
 ### The document
 
+- **Merge another document** into this one, before any page, with references
+  renumbered so the incoming pages keep pointing at their own content
 - **A whole-document rewrite** — rebuilds the page tree, copies every object through
   and recomputes the cross-reference, so pages can be deleted, reordered and inserted
 - **Delete, rotate, insert, extract, crop and reorder** page ranges, with annotations

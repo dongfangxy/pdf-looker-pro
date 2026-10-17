@@ -48,6 +48,8 @@ All notable changes are recorded here. The format follows
 - **Whole-document rewrite.** Rebuilds the page tree, copies every object through and
   recomputes the cross-reference, which is what makes deleting, reordering, inserting,
   extracting and cropping pages possible at all.
+- **Merge another document** — copies its object graph into this one with every
+  reference renumbered, and inserts its pages at any position.
 - **Page operations** with a dialogue for a range: delete, rotate, insert blank pages,
   extract, crop and reorder. Annotations travel with their pages.
 - **New documents** — blank pages, or a single page from an image.
