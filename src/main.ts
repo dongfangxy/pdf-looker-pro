@@ -22,6 +22,7 @@ import { ToolManager, type ToolName } from './tools/tool-manager.js';
 import { FindIndex } from './tools/find.js';
 import { Loupe } from './tools/loupe.js';
 import { buildPrintDocument, disposePrintDocument, parsePageRange } from './tools/print.js';
+import { showPageOpsDialog, type PageOperation } from './ui/pages-dialog.js';
 import { showPrintDialog } from './ui/print-dialog.js';
 import { documentKey, loadProgress, saveProgress } from './viewer/progress.js';
 import { showInputDialog, showPackDialog, showPromptDialog } from './ui/dialog.js';
@@ -94,6 +95,11 @@ const ui = {
   btnCloseDoc: mustFind<HTMLButtonElement>('btn-close-doc'),
   savePdf: mustFind<HTMLButtonElement>('btn-save-pdf'),
   print: mustFind<HTMLButtonElement>('btn-print'),
+  deletePages: mustFind<HTMLButtonElement>('btn-delete-pages'),
+  rotatePages: mustFind<HTMLButtonElement>('btn-rotate-pages'),
+  insertPage: mustFind<HTMLButtonElement>('btn-insert-page'),
+  extractPages: mustFind<HTMLButtonElement>('btn-extract-pages'),
+  cropPages: mustFind<HTMLButtonElement>('btn-crop-pages'),
   scroll: mustFind<HTMLDivElement>('scroll-container'),
   dropHint: mustFind<HTMLDivElement>('drop-hint'),
   dropTitle: mustFind<HTMLDivElement>('drop-title'),
@@ -1620,6 +1626,145 @@ async function exportAnnotationsJson(): Promise<void> {
     return true;
   }
 
+/**
+ * Swaps a rewritten file into the open session.
+ *
+ * The tab, its path and its annotations belong to the reader, not to the bytes, so the
+ * document is replaced underneath rather than opened as a second tab.
+ */
+async function replaceDocumentBytes(bytes: Uint8Array): Promise<void> {
+  const session = activeSession;
+  if (!session) return;
+  const kept = bytes.slice();
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const opened = await openFromArrayBuffer(buffer, session.name);
+  session.opened = opened;
+  session.bytes = kept.buffer as ArrayBuffer;
+  session.key = documentKey(opened.doc.fingerprints, opened.pageCount);
+  // Keep the reader where they were, clamped to the new extent.
+  session.snapshot = { ...viewer.getState(), page: Math.min(viewer.page, opened.pageCount) };
+  await activateSession(session);
+}
+
+/**
+ * Moves annotations onto the page numbers they now occupy.
+ *
+ * Pages carry their annotations, so an annotation on a deleted page has nowhere to go
+ * and is dropped. Anything else would leave marks floating over unrelated content.
+ */
+function remapAnnotations(sourceToTarget: Map<number, number>): number {
+  if (annotations.count === 0) return 0;
+  const kept: Annotation[] = [];
+  let dropped = 0;
+  let moved = false;
+  for (const item of annotations.all) {
+    const target = sourceToTarget.get(item.page);
+    if (target === undefined) {
+      dropped++;
+      continue;
+    }
+    if (target === item.page) {
+      kept.push(item);
+    } else {
+      kept.push({ ...item, page: target });
+      moved = true;
+    }
+  }
+  // Reload when pages moved as well as when some were dropped: an annotation whose page
+  // number changed has to be written back, or it stays behind on the wrong page.
+  if (dropped > 0 || moved) annotations.load(kept, false);
+  return dropped;
+}
+
+/** Runs one page operation: ask, build a plan, rewrite, install the result. */
+async function runPageOperation(operation: PageOperation): Promise<void> {
+  const session = activeSession;
+  if (!session?.bytes || !viewer.hasDocument) return;
+
+  const choice = await showPageOpsDialog(i18n, {
+    operation,
+    pageCount: viewer.pageCount,
+    currentPage: viewer.page,
+  });
+  if (!choice) return;
+
+  const total = viewer.pageCount;
+  const identity: PagePlan[] = Array.from({ length: total }, (_, index) => ({ sourceIndex: index }));
+  let plan: PagePlan[];
+  let extracted = false;
+
+  if (operation === 'delete' || operation === 'extract' || operation === 'crop') {
+    const selected = parsePageRange(choice.rangeText, total);
+    if (selected.length === 0) {
+      setStatus(i18n.t('pageOpsNoPages'), true);
+      return;
+    }
+    const chosen = new Set(selected);
+    if (operation === 'delete') {
+      if (chosen.size >= total) {
+        setStatus(i18n.t('pageOpsNoPages'), true);
+        return;
+      }
+      plan = identity.filter((_, index) => !chosen.has(index + 1));
+    } else if (operation === 'extract') {
+      plan = selected.map((page) => ({ sourceIndex: page - 1 }));
+      extracted = true;
+    } else {
+      plan = identity.map((entry, index) =>
+        chosen.has(index + 1) ? { ...entry, cropMargins: choice.margins } : entry,
+      );
+    }
+  } else if (operation === 'rotate') {
+    const chosen = new Set(parsePageRange(choice.rangeText, total));
+    if (chosen.size === 0) {
+      setStatus(i18n.t('pageOpsNoPages'), true);
+      return;
+    }
+    plan = identity.map((entry, index) =>
+      chosen.has(index + 1) ? { ...entry, rotateBy: choice.angle } : entry,
+    );
+  } else {
+    const raw = Number.parseInt(choice.rangeText, 10);
+    const at = Math.min(total + 1, Math.max(1, Number.isFinite(raw) ? raw : viewer.page));
+    plan = [...identity];
+    for (let count = 0; count < choice.count; count++) {
+      plan.splice(at - 1 + count, 0, {
+        sourceIndex: null,
+        mediaBox: [0, 0, choice.width, choice.height],
+      });
+    }
+  }
+
+  setStatus(i18n.t('loading'));
+  let result;
+  try {
+    result = await rewritePdf(new Uint8Array(session.bytes), plan);
+  } catch (error) {
+    setStatus(`${i18n.t('pageOpsFailed')}: ${String((error as Error)?.message ?? error)}`, true);
+    return;
+  }
+
+  if (extracted) {
+    const stem = (session.name || 'document').replace(/\.pdf$/i, '');
+    await openDocument(result.bytes.slice().buffer as ArrayBuffer, `${stem}-pages.pdf`, null);
+    setStatus(`${i18n.t('pageOpsExtracted')}: ${result.pageCount} 页`);
+    return;
+  }
+
+  // Map each source page onto the page number it now occupies.
+  const sourceToTarget = new Map<number, number>();
+  plan.forEach((entry, index) => {
+    if (entry.sourceIndex === null) return;
+    const sourcePage = entry.sourceIndex + 1;
+    if (!sourceToTarget.has(sourcePage)) sourceToTarget.set(sourcePage, index + 1);
+  });
+  const dropped = remapAnnotations(sourceToTarget);
+
+  await replaceDocumentBytes(result.bytes);
+  setStatus(dropped > 0 ? `${i18n.t('pageOpsDone')}（${dropped} 条批注随页面删除）` : i18n.t('pageOpsDone'));
+}
+
+/** Loads `<document>.pdf.arpk` when it exists, without failing the document open. */
 /** Loads `<document>.pdf.arpk` when it exists, without failing the document open. */
 async function loadSidecar(): Promise<void> {
   if (!desktop || !currentPath) return;
@@ -1843,6 +1988,12 @@ function buildMenuDescriptor(): MenuDescriptor {
           // Ctrl+S is the primary save: annotations belong in the PDF now. The sidecar
           // stays available, on a chord of its own.
           command(CMD.SaveIntoPdf, 'CmdOrCtrl+S'),
+          { type: 'separator' },
+          command(CMD.DeletePages),
+          command(CMD.RotatePages),
+          command(CMD.InsertBlankPage),
+          command(CMD.ExtractPages),
+          command(CMD.CropPages),
           command(CMD.Print, 'CmdOrCtrl+P'),
           command(CMD.Undo, 'CmdOrCtrl+Z'),
           command(CMD.Redo, 'CmdOrCtrl+Shift+Z'),
@@ -2297,6 +2448,13 @@ registerCommand(CMD.FirstPage, () => viewer.gotoPage(1));
 registerCommand(CMD.Settings, () => void openSettings());
 registerCommand(CMD.LastPage, () => viewer.gotoPage(viewer.pageCount));
 registerCommand(CMD.SaveAnnotations, () => void saveAnnotations());
+// Bound rather than only registered: a command with no button has no place in the
+// overflow menu, which is built from the toolbar's own entries.
+bindCommand(CMD.DeletePages, ui.deletePages, { onClick: () => void runPageOperation('delete') });
+bindCommand(CMD.RotatePages, ui.rotatePages, { onClick: () => void runPageOperation('rotate') });
+bindCommand(CMD.InsertBlankPage, ui.insertPage, { onClick: () => void runPageOperation('insert') });
+bindCommand(CMD.ExtractPages, ui.extractPages, { onClick: () => void runPageOperation('extract') });
+bindCommand(CMD.CropPages, ui.cropPages, { onClick: () => void runPageOperation('crop') });
 registerCommand(CMD.SaveIntoPdf, () => void saveIntoPdf());
 registerCommand(CMD.Undo, undoAnnotation);
 registerCommand(CMD.Redo, redoAnnotation);

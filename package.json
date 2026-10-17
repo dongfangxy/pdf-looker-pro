@@ -24,7 +24,7 @@
     "e2e:p5": "node tools/e2e-p5.mjs",
     "e2e:desktop": "node tools/e2e-desktop.mjs",
     "package": "npm run build && electron-builder --win portable",
-    "test": "node tools/test-container.mjs && node tools/test-font.mjs && node tools/e2e.mjs && node tools/e2e-i18n.mjs && node tools/e2e-resources.mjs && node tools/e2e-p5.mjs && node tools/e2e-settings.mjs && node tools/e2e-ux.mjs && node tools/e2e-tabs.mjs && node tools/e2e-styles.mjs && node tools/e2e-pdfwrite.mjs && node tools/e2e-pdfroundtrip.mjs && node tools/e2e-viewmodes.mjs && node tools/e2e-print-loupe.mjs && node tools/e2e-rewrite.mjs",
+    "test": "node tools/test-container.mjs && node tools/test-font.mjs && node tools/e2e.mjs && node tools/e2e-i18n.mjs && node tools/e2e-resources.mjs && node tools/e2e-p5.mjs && node tools/e2e-settings.mjs && node tools/e2e-ux.mjs && node tools/e2e-tabs.mjs && node tools/e2e-styles.mjs && node tools/e2e-pdfwrite.mjs && node tools/e2e-pdfroundtrip.mjs && node tools/e2e-viewmodes.mjs && node tools/e2e-print-loupe.mjs && node tools/e2e-rewrite.mjs && node tools/e2e-pageops.mjs",
     "test:desktop": "node tools/e2e-electron.mjs && node tools/e2e-desktop.mjs && node tools/e2e-save.mjs",
     "pack": "npm run build && electron-builder --win portable",
     "screenshot": "node tools/shoot-readme.mjs",

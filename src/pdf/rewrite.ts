@@ -31,13 +31,22 @@ import {
 export interface PagePlan {
   /** 0-based index into the source document, or `null` to insert a new page. */
   sourceIndex: number | null;
-  /**
-   * Absolute `/Rotate` in degrees, or omitted to keep the source value.
-   *
-   * Absolute rather than relative: the caller knows the current rotation, and an
-   * absolute value cannot be applied twice by accident.
-   */
+  /** Absolute `/Rotate` in degrees, or omitted to keep the source value. */
   rotate?: number;
+  /**
+   * Degrees to add to the source rotation.
+   *
+   * The caller usually wants "turn this page a quarter turn", not "make it 90°", and
+   * it should not have to read the current rotation to say so.
+   */
+  rotateBy?: number;
+  /**
+   * Margins to trim off the media box, in points.
+   *
+   * Relative like `rotateBy`: a crop is normally expressed as "10 pt off each side",
+   * which is independent of where the page sits on the canvas.
+   */
+  cropMargins?: { top: number; right: number; bottom: number; left: number };
   /** Absolute crop box, or `null` to restore the media box. Omitted keeps the source. */
   cropBox?: [number, number, number, number] | null;
   /** Inserted pages only: the media box. Defaults to US Letter. */
@@ -248,9 +257,28 @@ async function pageObjectText(
     entries.set('CropBox', array(source.cropBox.map((value) => num(value))));
   }
 
-  const rotation = plan.rotate === undefined ? source.rotate : normaliseRotation(plan.rotate);
+  const rotation =
+    plan.rotateBy !== undefined
+      ? normaliseRotation(source.rotate + plan.rotateBy)
+      : plan.rotate === undefined
+        ? source.rotate
+        : normaliseRotation(plan.rotate);
   if (rotation === 0) entries.delete('Rotate');
   else entries.set('Rotate', num(rotation));
+
+  // A margin crop is expressed against the page box the reader can see, which is the
+  // crop box when there is one, so it does not silently trim twice.
+  if (plan.cropMargins && !plan.cropBox) {
+    const base = source.cropBox ?? source.mediaBox;
+    const { top, right, bottom, left } = plan.cropMargins;
+    const x1 = base[0] + left;
+    const y1 = base[1] + bottom;
+    const x2 = base[2] - right;
+    const y2 = base[3] - top;
+    if (x2 - x1 > 8 && y2 - y1 > 8) {
+      entries.set('CropBox', array([num(x1), num(y1), num(x2), num(y2)]));
+    }
+  }
 
   return serializeValue({ kind: 'dict', value: entries });
 }
