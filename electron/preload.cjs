@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('desktop', {
   writeFile: (path, bytes) => ipcRenderer.invoke('desktop:write-file', { path, bytes }),
   /** Reads a file chosen earlier, e.g. from the recent list. */
   readFile: (path) => ipcRenderer.invoke('desktop:read-file', { path }),
+  listPdfs: (path) => ipcRenderer.invoke('desktop:list-pdfs', { path }),
 
   settings: {
     read: () => ipcRenderer.invoke('desktop:settings-read'),

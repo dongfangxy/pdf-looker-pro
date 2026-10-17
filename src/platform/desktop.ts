@@ -70,6 +70,13 @@ interface DesktopBridge {
   saveFileDialog(options: { title?: string; defaultPath?: string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>;
   writeFile(path: string, bytes: Uint8Array): Promise<{ ok: boolean; path?: string; error?: string }>;
   readFile(path: string): Promise<OpenedFile | null>;
+  /**
+   * PDFs under a folder, recursively.
+   *
+   * Listing also grants read access to what it finds: a folder the reader names is as
+   * explicit a permission as one they pick from a dialogue.
+   */
+  listPdfs(path: string): Promise<{ ok: boolean; files?: string[]; error?: string; truncated?: boolean }>;
   settings: {
     read(): Promise<DesktopSettings>;
     patch(patch: Partial<DesktopSettings>): Promise<DesktopSettings>;

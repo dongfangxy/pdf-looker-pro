@@ -6,7 +6,8 @@
 import { _electron as electron } from 'playwright';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, '..');
@@ -161,6 +162,68 @@ try {
   await win.waitForTimeout(1200);
   const bounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getBounds() ?? null);
   check('窗口几何被恢复', bounds !== null && Math.abs(bounds.width - 1024) <= 12 && Math.abs(bounds.height - 700) <= 12, bounds ? bounds.width + 'x' + bounds.height + ' @ ' + bounds.x + ',' + bounds.y : '\u65e0');
+} finally {
+  await app.close().catch(() => undefined);
+}
+
+console.log('\n=== 5b. 文件夹搜索 ===');
+app = await launch([fixture]);
+try {
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await win.waitForFunction(() => document.querySelectorAll('.page').length > 1, { timeout: 30000 });
+  await win.waitForTimeout(800);
+
+  // A folder with two PDFs, one of them one level down, and a file that is not a PDF.
+  const folder = mkdtempSync(join(tmpdir(), 'plp-folder-'));
+  mkdirSync(join(folder, 'nested'));
+  copyFileSync(fixture, join(folder, 'alpha.pdf'));
+  copyFileSync(fixture, join(folder, 'nested', 'beta.pdf'));
+  writeFileSync(join(folder, 'notes.txt'), 'not a pdf');
+
+  // The toolbar button, not Ctrl+F: synthetic keys do not reach the packaged window.
+  await win.click('#btn-find');
+  await win.waitForTimeout(600);
+  await win.fill('#find-input', 'Page 3');
+  await win.waitForTimeout(2600);
+
+  await win.click('#btn-more');
+  await win.waitForTimeout(350);
+  await win.click('.more-run[data-command="1291"]');
+  await win.waitForTimeout(500);
+  check('文件夹搜索对话框打开', (await win.locator('.modal').count()) >= 1);
+  await win.fill('.modal input', folder);
+  await win.click('.modal .primary');
+  await win.waitForTimeout(20000);
+
+
+  const result = await win.evaluate(() => ({
+    files: [...document.querySelectorAll('.search-file')].map((el) => el.textContent ?? ''),
+    rows: document.querySelectorAll('.search-hit-file').length,
+    summary: document.querySelector('.search-summary')?.textContent ?? '',
+    paths: [...document.querySelectorAll('.search-hit-file')].map((el) => el.dataset.filePath ?? ''),
+  }));
+
+  check('两个 PDF 都被搜到', result.files.length === 2, JSON.stringify(result.files));
+  check('子文件夹里的文件也在内', result.files.some((n) => n.includes('beta')), JSON.stringify(result.files));
+  check('非 PDF 文件被跳过', !result.files.some((n) => n.includes('notes')), JSON.stringify(result.files));
+  check('列出了匹配行', result.rows > 0, `${result.rows} 行`);
+  check('汇总说明文件数与匹配数', /\d+/.test(result.summary), result.summary);
+
+  // Clicking a result opens that document at the page it names.
+  await win.evaluate(() => {
+    const rows = [...document.querySelectorAll('.search-hit-file')];
+    rows[rows.length - 1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await win.waitForTimeout(6000);
+  const opened = await win.evaluate(() => ({
+    tabs: document.querySelectorAll('.doc-tab').length,
+    active: document.querySelector('.doc-tab.active .doc-tab-label')?.textContent ?? '',
+  }));
+  check('点击结果打开了文档', opened.tabs >= 2, `${opened.tabs} 个标签`);
+  // The debug hook is only installed with ?debug=, which this launch does not use, so the
+  // title is what proves a real document was opened.
+  check('打开的是那份文档', /Test Fixture/i.test(opened.active), opened.active);
 } finally {
   await app.close().catch(() => undefined);
 }

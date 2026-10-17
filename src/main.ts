@@ -17,7 +17,7 @@ import { openFromArrayBuffer, type OpenedDocument } from './viewer/pdf-document.
 import { Viewer, type ViewMode, type ViewerState } from './viewer/viewer.js';
 import { ThumbnailStrip } from './sidebar/thumbnails.js';
 import { renderOutline } from './sidebar/outline.js';
-import { SearchResults } from './sidebar/search-results.js';
+import { SearchResults, type ExternalHit } from './sidebar/search-results.js';
 import { AnnotationPanel } from './sidebar/annotations.js';
 import { ToolManager, type ToolName } from './tools/tool-manager.js';
 import { FindIndex } from './tools/find.js';
@@ -119,6 +119,7 @@ const ui = {
   newImage: mustFind<HTMLButtonElement>('btn-new-image'),
   reorderPages: mustFind<HTMLButtonElement>('btn-reorder-pages'),
   summary: mustFind<HTMLButtonElement>('btn-summary'),
+  searchFolder: mustFind<HTMLButtonElement>('btn-search-folder'),
   flatten: mustFind<HTMLButtonElement>('btn-flatten'),
   annotStamp: mustFind<HTMLButtonElement>('annot-stamp'),
   stampPick: mustFind<HTMLButtonElement>('btn-stamp-pick'),
@@ -1493,6 +1494,7 @@ const searchResults = new SearchResults(ui.searchResults, {
   emptyText: () => i18n.t('searchEmpty'),
   summaryText: (matches, pages) =>
     i18n.t('searchSummary').replace('{a}', String(matches)).replace('{b}', String(pages)),
+  onOpenExternal: (path, page) => void openSearchHit(path, page),
   onSelect: (index) => {
     const hit = findIndex.selectAt(index);
     repaintAllHighlights();
@@ -2198,6 +2200,7 @@ function buildMenuDescriptor(): MenuDescriptor {
           command(CMD.RotatePages),
           command(CMD.InsertBlankPage),
           command(CMD.ExtractPages),
+          command(CMD.SearchFolder),
           command(CMD.SummaryAnnotations),
           command(CMD.FlattenAnnotations),
           command(CMD.CropPages),
@@ -2605,6 +2608,121 @@ bindCommand(CMD.About, ui.about, {
 bindCommand(CMD.DocProperties, ui.props, { onClick: () => void showProperties() });
 bindCommand(CMD.TabThumbnails, ui.tabThumbnails, { onClick: () => showTab('thumbnails') });
 bindCommand(CMD.TabOutline, ui.tabOutline, { onClick: () => showTab('outline') });
+/**
+ * Opens the document a folder-search hit belongs to, at the page it names.
+ *
+ * Reuses an already-open tab when there is one: searching a folder and then clicking a
+ * result should not open a second copy of a document the reader already has in front of
+ * them.
+ */
+async function openSearchHit(path: string, page: number): Promise<void> {
+  const existing = sessions.find((session) => session.path === path);
+  if (existing) {
+    await activateSession(existing);
+    viewer.gotoPage(page);
+    return;
+  }
+  if (!desktop) return;
+  const file = await desktop.readFile(path);
+  if (!file || !file.bytes) {
+    setStatus(i18n.t('folderFailed'), true);
+    return;
+  }
+  const buffer = file.bytes.buffer.slice(
+    file.bytes.byteOffset,
+    file.bytes.byteOffset + file.bytes.byteLength,
+  ) as ArrayBuffer;
+  await openDocument(buffer, file.name, path);
+  viewer.gotoPage(page);
+}
+
+/**
+ * Searches a folder and its subfolders for the current find term.
+ *
+ * Each file is opened on its own and thrown away again: a folder search is a scan, not
+ * a shelf of open documents, and holding every parsed document would cost far more than
+ * it saves.
+ */
+async function searchFolder(): Promise<void> {
+  if (!desktop) {
+    setStatus(i18n.t('folderNeedsDesktop'), true);
+    return;
+  }
+  const query = ui.findInput.value.trim();
+  if (query === '') {
+    openFindBar();
+    setStatus(i18n.t('findNoQuery'), true);
+    return;
+  }
+
+  const folder = await showInputDialog(i18n, {
+    title: i18n.resolveCommand(CMD.SearchFolder)?.title ?? '在文件夹中搜索',
+    label: `${i18n.t('folderPath')}（${i18n.t('folderPathHint')}）`,
+    initial: '',
+    confirm: i18n.t('pageOpsConfirm'),
+    cancel: i18n.t('printCancel'),
+  });
+  if (folder === null || folder.trim() === '') return;
+
+  setStatus(i18n.t('folderScanning'));
+  const listed = await desktop.listPdfs(folder.trim());
+  if (!listed.ok) {
+    setStatus(`${i18n.t('folderFailed')}: ${listed.error ?? ''}`, true);
+    return;
+  }
+
+  const files = listed.files ?? [];
+  const hits: ExternalHit[] = [];
+  let scanned = 0;
+  for (const path of files) {
+    if (hits.length >= MAX_FOLDER_HITS) break;
+    const file = await desktop.readFile(path);
+    if (!file || !file.bytes) continue;
+    scanned++;
+    let opened: OpenedDocument | null = null;
+    try {
+      const buffer = file.bytes.buffer.slice(
+        file.bytes.byteOffset,
+        file.bytes.byteOffset + file.bytes.byteLength,
+      ) as ArrayBuffer;
+      opened = await openFromArrayBuffer(buffer, file.name);
+      const index = new FindIndex();
+      await index.build(opened.doc);
+      index.search({
+        query,
+        caseSensitive: ui.findCase.checked,
+        entireWord: ui.findWord.checked,
+      });
+      for (const hit of index.matches) {
+        if (hits.length >= MAX_FOLDER_HITS) break;
+        const text = index.textFor(hit.page);
+        hits.push({
+          path,
+          name: file.name,
+          page: hit.page,
+          before: text.slice(Math.max(0, hit.start - 40), hit.start).replace(/\s+/g, ' '),
+          match: text.slice(hit.start, hit.start + hit.length),
+          after: text.slice(hit.start + hit.length, hit.start + hit.length + 40).replace(/\s+/g, ' '),
+        });
+      }
+    } catch {
+      // A file that will not parse is skipped, not fatal: one damaged PDF in a folder
+      // should not stop the search.
+    } finally {
+      await opened?.doc.destroy();
+    }
+  }
+
+  const base = i18n.t('folderDone').replace('{a}', String(scanned)).replace('{b}', String(hits.length));
+  const note = listed.truncated
+    ? `${base}${i18n.t('folderTruncated').replace('{a}', String(files.length))}`
+    : base;
+  searchResults.setExternal(query, hits, note);
+  showTab('search');
+  setStatus(hits.length === 0 ? i18n.t('folderNone') : note);
+}
+
+bindCommand(CMD.TabSearch, ui.tabSearch, { onClick: () => showTab('search') });
 bindCommand(CMD.TabSearch, ui.tabSearch, { onClick: () => showTab('search') });
 bindCommand(CMD.TabAnnotations, ui.tabAnnotations, { onClick: () => showTab('annotations') });
 bindCommand(CMD.FindPrev, ui.findPrev, { onClick: () => void runFind('prev') });
@@ -2668,6 +2786,7 @@ bindCommand(CMD.InsertBlankPage, ui.insertPage, { onClick: () => void runPageOpe
 bindCommand(CMD.ExtractPages, ui.extractPages, { onClick: () => void runPageOperation('extract') });
 bindCommand(CMD.NewBlankDocument, ui.newBlank, { onClick: () => void newBlankDocument() });
 bindCommand(CMD.NewFromImage, ui.newImage, { onClick: () => void newFromImage() });
+bindCommand(CMD.SearchFolder, ui.searchFolder, { onClick: () => void searchFolder() });
 bindCommand(CMD.SummaryAnnotations, ui.summary, { onClick: () => void summarizeAnnotations() });
 bindCommand(CMD.FlattenAnnotations, ui.flatten, { onClick: () => void flattenAnnotations() });
 bindCommand(CMD.ReorderPages, ui.reorderPages, { onClick: () => void reorderPages() });
@@ -2764,6 +2883,8 @@ async function pickStamp(): Promise<void> {
 
 /** Resolution the summary renders at. 2 means 144 DPI, the same as printing. */
 const SUMMARY_SCALE = 2;
+/** Upper bound on the matches a folder search collects. */
+const MAX_FOLDER_HITS = 2000;
 
 /** Base64 from a data URL, as bytes. */
 function dataUrlBytes(dataUrl: string): Uint8Array {

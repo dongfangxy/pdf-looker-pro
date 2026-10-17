@@ -8,6 +8,15 @@
  */
 import type { FindHit, FindIndex } from '../tools/find.js';
 
+export interface ExternalHit {
+  path: string;
+  name: string;
+  page: number;
+  before: string;
+  match: string;
+  after: string;
+}
+
 export interface SearchResultsOptions {
   /** Go to a match, by index into the current match list. */
   onSelect(index: number): void;
@@ -17,6 +26,9 @@ export interface SearchResultsOptions {
   emptyText(): string;
   /** Text shown before a search has been run. */
   idleText(): string;
+  /** Open a match found outside the current document. */
+  onOpenExternal?(path: string, page: number): void;
+
   /** "3 matches on 2 pages". */
   summaryText(matches: number, pages: number): string;
 }
@@ -29,8 +41,18 @@ export class SearchResults {
   private readonly options: SearchResultsOptions;
   private find: FindIndex | null = null;
   private query = '';
+  /** Hits from a folder search, which replace the in-document list while shown. */
+  private external: ExternalHit[] | null = null;
+  private externalNote = '';
   private readonly onActivate = (event: MouseEvent): void => {
     const target = event.target as HTMLElement | null;
+    const external = target?.closest<HTMLElement>('[data-file-path]');
+    if (external) {
+      const path = external.dataset['filePath'];
+      const page = Number(external.dataset['filePage'] ?? '1');
+      if (path && Number.isFinite(page)) this.options.onOpenExternal?.(path, page);
+      return;
+    }
     const row = target?.closest<HTMLElement>('[data-hit-index]');
     if (!row) return;
     const index = Number(row.dataset['hitIndex']);
@@ -48,11 +70,24 @@ export class SearchResults {
   setSource(find: FindIndex | null, query: string): void {
     this.find = find;
     this.query = query;
+    this.external = null;
+    this.render();
+  }
+
+  /** Shows hits gathered from a folder, grouped by file and page. */
+  setExternal(query: string, hits: ExternalHit[], note = ''): void {
+    this.external = hits;
+    this.externalNote = note;
+    this.query = query;
     this.render();
   }
 
   render(): void {
     this.host.replaceChildren();
+    if (this.external !== null) {
+      this.renderExternal();
+      return;
+    }
     if (!this.find || this.query.trim() === '') {
       const idle = document.createElement('div');
       idle.className = 'search-idle';
@@ -118,6 +153,65 @@ export class SearchResults {
       }
     }
   }
+/** Renders the folder-search list, grouped by file and then by page. */
+  private renderExternal(): void {
+    const hits = this.external ?? [];
+    const heading = document.createElement('div');
+    heading.className = 'search-summary';
+    heading.textContent = this.externalNote;
+    this.host.appendChild(heading);
+
+    if (hits.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'search-idle';
+      empty.textContent = this.options.emptyText();
+      this.host.appendChild(empty);
+      return;
+    }
+
+    // Grouped by file, then page: a reader picks the document first, then the place in it.
+    const byFile = new Map<string, ExternalHit[]>();
+    for (const hit of hits) {
+      const list = byFile.get(hit.path);
+      if (list) list.push(hit);
+      else byFile.set(hit.path, [hit]);
+    }
+
+    for (const [path, fileHits] of byFile) {
+      const file = document.createElement('div');
+      file.className = 'search-file';
+      file.textContent = `${fileHits[0]?.name ?? path} · ${fileHits.length}`;
+      this.host.appendChild(file);
+
+      for (const hit of fileHits) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'search-hit search-hit-file';
+        row.dataset['filePath'] = hit.path;
+        row.dataset['filePage'] = String(hit.page);
+
+        const page = document.createElement('span');
+        page.className = 'search-file-page';
+        page.textContent = String(hit.page);
+
+        const lead = document.createElement('span');
+        lead.className = 'search-context';
+        lead.textContent = `…${collapse(hit.before)}`;
+
+        const marked = document.createElement('mark');
+        marked.className = 'search-match';
+        marked.textContent = hit.match;
+
+        const tail = document.createElement('span');
+        tail.className = 'search-context';
+        tail.textContent = `${collapse(hit.after)}…`;
+
+        row.append(page, lead, marked, tail);
+        this.host.appendChild(row);
+      }
+    }
+  }
+
 }
 
 /** Collapses whitespace so a snippet stays on one line. */

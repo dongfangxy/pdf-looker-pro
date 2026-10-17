@@ -1329,3 +1329,23 @@ html, body {
   border-radius: 2px;
   padding: 0 1px;
 }
+/* A file in a folder-search result list. */
+.search-file {
+  padding: 8px 10px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.8;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+}
+
+.search-file-page {
+  display: inline-block;
+  min-width: 18px;
+  margin-right: 5px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  font-size: 10px;
+  opacity: 0.8;
+}
