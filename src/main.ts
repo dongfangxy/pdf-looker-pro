@@ -20,6 +20,9 @@ import { renderOutline } from './sidebar/outline.js';
 import { AnnotationPanel } from './sidebar/annotations.js';
 import { ToolManager, type ToolName } from './tools/tool-manager.js';
 import { FindIndex } from './tools/find.js';
+import { Loupe } from './tools/loupe.js';
+import { buildPrintDocument, disposePrintDocument, parsePageRange } from './tools/print.js';
+import { showPrintDialog } from './ui/print-dialog.js';
 import { documentKey, loadProgress, saveProgress } from './viewer/progress.js';
 import { showInputDialog, showPackDialog, showPromptDialog } from './ui/dialog.js';
 import { showSettingsDialog, type SettingsField } from './ui/settings-dialog.js';
@@ -89,6 +92,7 @@ const ui = {
   btnLast: mustFind<HTMLButtonElement>('btn-last'),
   btnCloseDoc: mustFind<HTMLButtonElement>('btn-close-doc'),
   savePdf: mustFind<HTMLButtonElement>('btn-save-pdf'),
+  print: mustFind<HTMLButtonElement>('btn-print'),
   scroll: mustFind<HTMLDivElement>('scroll-container'),
   dropHint: mustFind<HTMLDivElement>('drop-hint'),
   dropTitle: mustFind<HTMLDivElement>('drop-title'),
@@ -100,6 +104,7 @@ const ui = {
   toolSelect: mustFind<HTMLButtonElement>('tool-select'),
   toolZoom: mustFind<HTMLButtonElement>('tool-zoom'),
   toolSnapshot: mustFind<HTMLButtonElement>('tool-snapshot'),
+  toolLoupe: mustFind<HTMLButtonElement>('tool-loupe'),
 
   annotHighlight: mustFind<HTMLButtonElement>('annot-highlight'),
   annotUnderline: mustFind<HTMLButtonElement>('annot-underline'),
@@ -746,6 +751,82 @@ const tools = new ToolManager({
     setStatus(hintFor(tool));
   },
 });
+
+// The magnifier reads the rendered page canvases, so it needs the pages container and
+// a positioned host to place its lens in.
+const loupe = new Loupe(ui.content, ui.pages);
+loupe.attach();
+
+/**
+ * Prints the pages the reader asks for.
+ *
+ * Pages are rasterised into a container that only exists on paper; the print
+ * stylesheet hides the whole shell and shows that container. The packaged window and
+ * a browser tab run the same path.
+ */
+async function runPrint(): Promise<void> {
+  if (!viewer.hasDocument) return;
+  const choice = await showPrintDialog(i18n, {
+    pageCount: viewer.pageCount,
+    currentPage: viewer.page,
+    rangeText: `1-${viewer.pageCount}`,
+  });
+  if (!choice) return;
+
+  const pages =
+    choice.range === 'current'
+      ? [viewer.page]
+      : choice.range === 'custom'
+        ? parsePageRange(choice.rangeText, viewer.pageCount)
+        : Array.from({ length: viewer.pageCount }, (_, index) => index + 1);
+
+  if (pages.length === 0) {
+    setStatus(i18n.t('printNoPages'), true);
+    return;
+  }
+
+  setStatus(i18n.t('printPreparing'));
+  let prepared: HTMLElement | null = null;
+  try {
+    prepared = await buildPrintDocument(
+      viewer,
+      { pages, ...choice.options },
+      {
+        rendering: (done, total) => i18n.t('printRendering').replace('{a}', String(done)).replace('{b}', String(total)),
+        failed: (page, reason) => i18n.t('printRenderFailed').replace('{a}', String(page)).replace('{b}', reason),
+        cancelled: () => i18n.t('printNoPages'),
+      },
+      (text) => setStatus(text),
+    );
+  } catch (error) {
+    setStatus(`${i18n.t('printFailed')}: ${String((error as Error)?.message ?? error)}`, true);
+    disposePrintDocument();
+    return;
+  }
+
+  if (!prepared) {
+    setStatus(i18n.t('printFailed'), true);
+    disposePrintDocument();
+    return;
+  }
+
+  if (desktop) {
+    const result = await desktop.print({ printBackground: true });
+    if (!result.ok && result.reason) setStatus(`${i18n.t('printFailed')}: ${result.reason}`, true);
+    else setStatus(i18n.resolveCommand(CMD.Print)?.status ?? i18n.t('printTitle'));
+    // The platform dialogue has closed by the time this resolves.
+    disposePrintDocument();
+    return;
+  }
+
+  window.print();
+  setStatus(i18n.resolveCommand(CMD.Print)?.status ?? i18n.t('printTitle'));
+  // `afterprint` fires when the browser's dialogue closes, which is the right moment to
+  // drop the sheets: they are large, but removing them before printing starts would
+  // yield blank pages. The timer only covers a browser that never fires the event.
+  window.addEventListener('afterprint', () => disposePrintDocument(), { once: true });
+  setTimeout(() => disposePrintDocument(), 20000);
+}
 
 function downloadBlob(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob);
@@ -1659,6 +1740,7 @@ function buildMenuDescriptor(): MenuDescriptor {
           // Ctrl+S is the primary save: annotations belong in the PDF now. The sidecar
           // stays available, on a chord of its own.
           command(CMD.SaveIntoPdf, 'CmdOrCtrl+S'),
+          command(CMD.Print, 'CmdOrCtrl+P'),
           command(CMD.Undo, 'CmdOrCtrl+Z'),
           command(CMD.Redo, 'CmdOrCtrl+Shift+Z'),
           command(CMD.SaveAnnotations, 'CmdOrCtrl+Shift+S'),
@@ -2069,6 +2151,15 @@ bindCommand(CMD.ToolHand, ui.toolHand, { onClick: () => tools.setTool('hand') })
 bindCommand(CMD.ToolSelect, ui.toolSelect, { onClick: () => tools.setTool('select') });
 bindCommand(CMD.ToolZoom, ui.toolZoom, { onClick: () => tools.setTool('zoom') });
 bindCommand(CMD.ToolSnapshot, ui.toolSnapshot, { onClick: () => tools.setTool('snapshot') });
+bindCommand(CMD.Loupe, ui.toolLoupe, {
+  onClick: () => {
+    loupe.setEnabled(!loupe.isEnabled);
+    ui.toolLoupe.classList.toggle('active', loupe.isEnabled);
+    setStatus(i18n.t(loupe.isEnabled ? 'loupeOn' : 'loupeOff'));
+  },
+});
+registerCommand(CMD.Print, () => void runPrint());
+bindCommand(CMD.Print, ui.print, { onClick: () => void runPrint() });
 
 bindCommand(CMD.AnnotHighlight, ui.annotHighlight, { onClick: () => tools.setTool('highlight') });
 bindCommand(CMD.AnnotUnderline, ui.annotUnderline, { onClick: () => tools.setTool('underline') });
@@ -2345,6 +2436,11 @@ ui.fileInput.addEventListener('change', () => {
 
     if (!event.ctrlKey && !event.metaKey) return;
 
+    if (key === 'p') {
+      event.preventDefault();
+      void runPrint();
+      return;
+    }
     if (key === 'z') {
       event.preventDefault();
       if (event.shiftKey) redoAnnotation();

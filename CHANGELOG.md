@@ -29,6 +29,20 @@ All notable changes are recorded here. The format follows
   still works for readers who know it.
 - The toolbar save button is a floppy disk, as tradition demands.
 
+### Added
+
+- **Magnifier.** A lens follows the pointer and enlarges the page under it, read from
+  the already-rendered canvas so it costs nothing per frame and always matches the
+  current zoom.
+- **Printing** with a settings dialogue: page range (`1-5, 8, 11-`), scale, and
+  orientation. Pages are rasterised at 144 DPI into a container that only exists on
+  paper; the print stylesheet hides the whole shell, so the packaged window and a
+  browser tab print the same document.
+- **Actual size** and **fit visible** as zoom modes, `Ctrl+P`, and `Ctrl+0`.
+- **Four view modes**, matching the original: single, continuous, facing (one pair), and
+  continuous facing.
+- **View history** on `Alt+Left` / `Alt+Right`, and a go-to-page dialogue on `Ctrl+G`.
+
 ### Notes
 
 - An encrypted document is refused rather than written to; the security handler is

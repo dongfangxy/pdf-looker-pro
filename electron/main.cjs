@@ -372,6 +372,25 @@ function registerIpc() {
    * page finishes loading, but the renderer only subscribes once its resource pack
    * has loaded. Without a pull path that message would be delivered into the void.
    */
+// Printing is a renderer-driven flow: the page builds the printable document and
+// the print stylesheet selects it, so the main process only raises the dialogue.
+ipcMain.handle('desktop:print', async (event, options) => {
+  const contents = event.sender;
+  return new Promise((resolve) => {
+    try {
+      contents.print(
+        {
+          silent: false,
+          printBackground: options && options.printBackground === false ? false : true,
+          margins: { marginType: 'none' },
+        },
+        (success, failureReason) => resolve({ ok: success === true, reason: failureReason }),
+      );
+    } catch (error) {
+      resolve({ ok: false, reason: String(error && error.message ? error.message : error) });
+    }
+  });
+});
   ipcMain.handle('desktop:take-pending-open', () => {
     const target = pendingOpenPath;
     pendingOpenPath = null;

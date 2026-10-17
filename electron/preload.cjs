@@ -53,4 +53,12 @@ contextBridge.exposeInMainWorld('desktop', {
   onCloseRequested: (callback) => subscribe('desktop:close-requested', callback),
   /** Confirms the close may proceed. */
   confirmClose: () => ipcRenderer.send('desktop:close-confirmed'),
+
+  /**
+   * Opens the platform print dialogue for this window.
+   *
+   * The renderer has already built the printable document and the print stylesheet
+   * selects it, so this only has to raise the dialogue.
+   */
+  print: (options) => ipcRenderer.invoke('desktop:print', options),
 });

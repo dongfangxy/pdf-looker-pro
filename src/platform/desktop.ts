@@ -79,6 +79,8 @@ interface DesktopBridge {
   takePendingOpen(): Promise<{ path: string; name: string } | null>;
   onCloseRequested(callback: () => void): () => void;
   confirmClose(): void;
+  /** Opens the platform print dialogue for the current window. */
+  print(options?: { printBackground?: boolean }): Promise<{ ok: boolean; reason?: string }>;
 }
 
 declare global {

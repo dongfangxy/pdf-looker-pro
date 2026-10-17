@@ -1139,3 +1139,74 @@ html, body {
      never become a hit target. */
   pointer-events: auto;
 }
+
+/* ---------- magnifier ---------- */
+/* Positioned against the viewport so no ancestor's overflow can clip the lens. */
+.loupe {
+  position: fixed;
+  z-index: 60;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  border: 2px solid var(--border);
+  box-shadow: 0 6px 22px var(--shadow);
+  background: #fff;
+}
+.loupe-canvas { display: block; }
+.loupe-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 11px;
+}
+.loupe::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -5px 0 0 -5px;
+  border: 1px solid rgba(224, 52, 47, 0.9);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.loupe-on .page { cursor: zoom-in; }
+
+/* ---------- print settings ---------- */
+.modal-print { width: min(460px, 92vw); }
+.print-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.print-label { flex: 0 0 68px; padding-top: 5px; color: var(--fg-muted); font-size: 12px; }
+.print-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1; }
+.print-radio { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; }
+.print-select { width: auto; min-width: 110px; }
+.print-range-input { width: 130px; }
+.print-percent-input { width: 62px; }
+.print-summary { margin-top: 6px; font-size: 12px; color: var(--fg-muted); }
+
+/* ---------- printing ---------- */
+/* Only the generated sheets reach paper: the whole application shell is hidden. */
+#print-root { display: none; }
+@media print {
+  body > *:not(#print-root) { display: none !important; }
+  #print-root { display: block !important; }
+  #print-root .print-page {
+    break-after: page;
+    page-break-after: always;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+  }
+  #print-root .print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  #print-root img { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  html, body { background: #fff !important; }
+}
