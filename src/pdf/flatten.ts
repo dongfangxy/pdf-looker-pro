@@ -166,6 +166,7 @@ export function flattenPage(
         break;
       }
       case 'underline':
+      case 'replace':
       case 'strikeout': {
         parts.push(`q ${color} rg`);
         const fraction = item.kind === 'underline' ? 0.92 : 0.5;

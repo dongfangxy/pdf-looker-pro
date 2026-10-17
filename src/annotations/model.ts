@@ -24,6 +24,8 @@ export const ANNOT_KINDS = [
   'highlight',
   'underline',
   'strikeout',
+  /** Replaced text: struck through, with its substitute carried in `note`. */
+  'replace',
   'ink',
   'note',
   'rect',
@@ -186,6 +188,8 @@ export const DEFAULT_COLORS: Record<AnnotKind, string> = {
   'measure-perimeter': '#2f6bd8',
   stamp: 'annotStamp',
   'measure-area': '#1f9d55',
+  // Red, because a replacement is a correction rather than a comment.
+  replace: '#c0392b',
 };
 
 /** Palette offered in the annotation toolbar. */

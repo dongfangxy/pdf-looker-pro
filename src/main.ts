@@ -149,6 +149,7 @@ const ui = {
   annotHighlight: mustFind<HTMLButtonElement>('annot-highlight'),
   annotUnderline: mustFind<HTMLButtonElement>('annot-underline'),
   annotStrikeout: mustFind<HTMLButtonElement>('annot-strikeout'),
+  annotReplace: mustFind<HTMLButtonElement>('annot-replace'),
   annotInk: mustFind<HTMLButtonElement>('annot-ink'),
   annotNote: mustFind<HTMLButtonElement>('annot-note'),
   annotRect: mustFind<HTMLButtonElement>('annot-rect'),
@@ -479,6 +480,7 @@ const ICON_ELEMENTS: Record<string, HTMLElement> = {
   'annot-highlight': ui.annotHighlight,
   'annot-underline': ui.annotUnderline,
   'annot-strikeout': ui.annotStrikeout,
+  'annot-replace': ui.annotReplace,
   'annot-ink': ui.annotInk,
   'annot-note': ui.annotNote,
   'annot-rect': ui.annotRect,
@@ -612,6 +614,8 @@ function toolCommandId(tool: ToolName): number {
       return CMD.AnnotUnderline;
     case 'strikeout':
       return CMD.AnnotStrikeout;
+    case 'replace':
+      return CMD.AnnotReplace;
     case 'ink':
       return CMD.AnnotInk;
     case 'note':
@@ -658,6 +662,22 @@ const annotationLayer = new AnnotationLayer({
   geometryFor: (page) => viewer.pageGeometry(page),
   pageAtPoint: (x, y) => viewer.pageAtPoint(x, y),
   currentTool: () => tools.tool,
+  // A replacement is not finished until it has a substitute; asking here keeps the
+  // gesture and the text in one flow instead of leaving a mark that says nothing.
+  onReplaceCreated: (item) => {
+    void (async () => {
+      const text = await showInputDialog(i18n, {
+        title: i18n.resolveCommand(CMD.AnnotReplace)?.title ?? '替换文本',
+        label: i18n.t('replacePrompt'),
+        initial: '',
+        confirm: i18n.t('pageOpsConfirm'),
+        cancel: i18n.t('printCancel'),
+      });
+      if (text === null || text.trim() === '') return;
+      annotations.update(item.id, { note: text.trim() });
+      history.record(snapshotAnnotations());
+    })();
+  },
   currentStamp: () => currentStamp,
   stampLabel: (stamp) => i18n.t(STAMP_LABEL_KEYS[stamp]),
   onStatus: (text, isError) => setStatus(text, isError ?? false),
@@ -892,6 +912,8 @@ function kindCommandId(kind: AnnotKind): number {
       return CMD.AnnotInk;
     case 'note':
       return CMD.AnnotNote;
+    case 'replace':
+      return CMD.AnnotReplace;
     default:
       return CMD.AnnotRect;
   }
@@ -2386,6 +2408,7 @@ command(CMD.GoToPage, 'CmdOrCtrl+G'),
         items: [
           command(CMD.AnnotHighlight, 'CmdOrCtrl+Shift+H'),
           command(CMD.AnnotUnderline),
+          command(CMD.AnnotReplace),
           command(CMD.AnnotStrikeout),
           { type: 'separator' },
           command(CMD.AnnotInk),
@@ -2877,6 +2900,8 @@ bindCommand(CMD.Print, ui.print, { onClick: () => void runPrint() });
 
 bindCommand(CMD.AnnotHighlight, ui.annotHighlight, { onClick: () => tools.setTool('highlight') });
 bindCommand(CMD.AnnotUnderline, ui.annotUnderline, { onClick: () => tools.setTool('underline') });
+bindCommand(CMD.AnnotReplace, ui.annotReplace, { onClick: () => tools.setTool('replace') });
+
 bindCommand(CMD.AnnotStrikeout, ui.annotStrikeout, { onClick: () => tools.setTool('strikeout') });
 bindCommand(CMD.AnnotInk, ui.annotInk, { onClick: () => tools.setTool('ink') });
 bindCommand(CMD.AnnotStamp, ui.annotStamp, { onClick: () => tools.setTool('stamp') });

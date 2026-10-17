@@ -35,6 +35,7 @@ const KIND_MARK: Record<AnnotKind, string> = {
   'measure-perimeter': '⬡',
   stamp: 'annotStamp',
   'measure-area': '▧',
+  replace: '⇄',
 };
 
 export class AnnotationPanel {

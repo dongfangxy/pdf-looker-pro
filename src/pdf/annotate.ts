@@ -139,6 +139,9 @@ function subtypeFor(kind: AnnotKind): string {
   switch (kind) {
     case 'highlight': return 'Highlight';
     case 'underline': return 'Underline';
+    // PDF has no replace-text annotation type. A strikeout carrying the substitute in
+    // /Contents is what the format offers, and every reader shows the strike.
+    case 'replace':
     case 'strikeout': return 'StrikeOut';
     case 'ink': return 'Ink';
     case 'note': return 'Text';

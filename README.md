@@ -47,8 +47,9 @@ use for reading and marking up papers.
 
 ### Annotating
 
-- **Ten annotation types** — highlight, underline, strikeout, freehand ink, sticky note,
-  rectangle, ellipse, arrow, text box and callout
+- **Eleven annotation types** — highlight, underline, strikeout, freehand ink, sticky
+  note, rectangle, ellipse, arrow, text box, callout, and replace text — which strikes
+  out a selection and carries the substitute as its comment
 - **Select without switching tools** — clicking an existing annotation selects it under any
   tool, and the toolbar returns to the pointer after you create one
 - **Drag to move**, with a visible selection frame and a corner grip

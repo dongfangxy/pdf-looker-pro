@@ -34,6 +34,7 @@ export const CMD = {
 
   TabThumbnails: 1060,
   TabOutline: 1061,
+  AnnotReplace: 1294,
   MergeDocument: 1293,
   SaveSearch: 1292,
   SearchFolder: 1291,

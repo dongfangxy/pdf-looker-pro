@@ -59,6 +59,8 @@ All notable changes are recorded here. The format follows
 - **Form fields are highlighted** — `/Widget` rectangles are tinted from a setting, so
   a reader can see where a form asks for input. Filling them is not implemented and is
   not claimed.
+- **Replace text** — strikes out a selection and carries the substitute in the
+  annotation's comment, written as a `/StrikeOut` so other readers show the strike.
 - **Flatten** annotations into the page, and **summarise** the annotated pages into a
   new document.
 - **A search panel** listing matches by page, **folder search** across documents, and

@@ -26,7 +26,7 @@ import {
 import { distance, formatArea, formatLength, polygonArea, polylineLength, type MeasureUnit } from '../tools/measure.js';
 
 /** Tools that act on a text selection rather than on dragged geometry. */
-export const TEXT_MARKUP_KINDS: readonly AnnotKind[] = ['highlight', 'underline', 'strikeout'];
+export const TEXT_MARKUP_KINDS: readonly AnnotKind[] = ['highlight', 'underline', 'strikeout', 'replace'];
 
 export interface PageGeometry {
   pageNumber: number;
@@ -50,6 +50,8 @@ export interface AnnotationLayerOptions {
   currentTool(): string;
   /** Which standard stamp a click places. */
   currentStamp?: () => StampId;
+  /** Called after a replacement mark is made, to collect its substitute text. */
+  onReplaceCreated?: (item: Annotation) => void;
   /** The word drawn on a stamp of the given kind. */
   stampLabel?: (stamp: StampId) => string;
   onStatus(text: string, isError?: boolean): void;
@@ -77,6 +79,7 @@ const KIND_BY_TOOL: Record<string, AnnotKind> = {
   highlight: 'highlight',
   underline: 'underline',
   strikeout: 'strikeout',
+  replace: 'replace',
   ink: 'ink',
   note: 'note',
     stamp: 'stamp',
@@ -379,6 +382,10 @@ export class AnnotationLayer {
         part.style.borderBottom = `${strokePx}px ${item.strokeDash ? 'dashed' : 'solid'} ${item.color}`;
       } else if (item.kind === 'strikeout') {
         part.style.borderTop = `${strokePx}px ${item.strokeDash ? 'dashed' : 'solid'} ${item.color}`;
+      } else if (item.kind === 'replace') {
+        // Dashed, so a replacement reads differently from a plain strikeout at a glance.
+        part.style.borderTop = `${strokePx}px dashed ${item.color}`;
+        part.style.background = withAlpha(item.color, 0.1);
       } else if (item.kind === 'rect' || item.kind === 'ellipse') {
         part.style.border = `${strokePx}px ${item.strokeDash ? 'dashed' : 'solid'} ${item.color}`;
         part.style.borderRadius = item.kind === 'ellipse' ? '50%' : '0';
@@ -759,7 +766,7 @@ export class AnnotationLayer {
       if (text.trim().length === 0) return;
       const rects = this.selectionRects(page, text);
       if (!rects) return;
-      this.store.add({
+      const created = this.store.add({
         page,
         kind,
         color: this.activeColor ?? DEFAULT_COLORS[kind],
@@ -768,6 +775,8 @@ export class AnnotationLayer {
       });
       selection?.removeAllRanges();
       this.afterChange();
+      // A replacement is not finished until it has something to say; the caller asks.
+      if (kind === 'replace') this.options.onReplaceCreated?.(created);
       this.options.onCreated();
     }
   };

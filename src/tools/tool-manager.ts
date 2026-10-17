@@ -17,6 +17,7 @@
  * toolbar state stay consistent.
  */
 import type { Viewer } from '../viewer/viewer.js';
+import { TEXT_MARKUP_KINDS } from '../annotations/layer.js';
 
 export type ToolName =
   | 'hand'
@@ -27,6 +28,7 @@ export type ToolName =
   | 'highlight'
   | 'underline'
   | 'strikeout'
+  | 'replace'
   | 'ink'
   | 'note'
   | 'stamp'
@@ -40,7 +42,9 @@ export type ToolName =
   | 'measure-area';
 
 /** Tools that need the text layer to accept pointer input. */
-const TEXT_INTERACTIVE: ReadonlySet<ToolName> = new Set<ToolName>(['select', 'highlight', 'underline', 'strikeout']);
+// Derived from the markup kinds rather than listed again: a hand-kept second list is how
+// the replace tool ended up able to be selected but unable to select any text.
+const TEXT_INTERACTIVE: ReadonlySet<ToolName> = new Set<ToolName>(['select', ...TEXT_MARKUP_KINDS]);
 
 export interface ToolManagerOptions {
   /** Positioned ancestor the snapshot rubber band is appended to. */
