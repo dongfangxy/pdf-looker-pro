@@ -41,6 +41,7 @@ export const en: LanguagePack = {
     [CMD.TabOutline]: { title: 'Outline', tooltip: 'Outline', status: 'Show the document outline', short: 'Outline' },
 
 
+    [CMD.TabSearch]: { title: 'Search results', tooltip: 'Show the list of matches', status: 'Search results', short: 'Search' },
     [CMD.TabAnnotations]: { title: 'Annotations', tooltip: 'Annotation list', status: 'Show the annotation list for this document', short: 'Notes' },
 
     [CMD.ToolPointer]: { title: 'Select objects', tooltip: 'Select and edit existing annotations', status: 'Select tool: click an annotation to select it, then press Delete', short: 'Select' },
@@ -297,6 +298,10 @@ export const en: LanguagePack = {
     reorderLabel: 'Page order',
     reorderDone: 'Pages reordered',
 
+    searchResults: 'Search results',
+    searchIdle: 'Type what to look for; the matches are listed here by page.',
+    searchEmpty: 'No matches.',
+    searchSummary: '{a} matches on {b} pages',
     annotReply: 'Add a reply',
     annotStamp: 'Stamp',
     stampApproved: 'Approved',

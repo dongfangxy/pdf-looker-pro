@@ -36,6 +36,7 @@ export const zhCN: LanguagePack = {
 
     [CMD.TabThumbnails]: { title: '缩略图', tooltip: '缩略图', status: '显示页面缩略图', short: '缩略图' },
     [CMD.TabOutline]: { title: '大纲', tooltip: '大纲', status: '显示文档大纲', short: '大纲' },
+    [CMD.TabSearch]: { title: '搜索结果', tooltip: '显示查找结果列表', status: '搜索结果', short: '搜索' },
     [CMD.TabAnnotations]: { title: '批注', tooltip: '批注列表', status: '显示本文档的批注列表', short: '批注' },
 
     [CMD.ToolPointer]: { title: '选取对象', tooltip: '选取并编辑已有批注', status: '选取工具：点击批注即可选中，选中后按 Delete 删除', short: '选取' },
@@ -292,6 +293,10 @@ export const zhCN: LanguagePack = {
     reorderLabel: '页面顺序',
     reorderDone: '页面已重排',
 
+    searchResults: '搜索结果',
+    searchIdle: '输入要查找的内容，结果会按页列在这里。',
+    searchEmpty: '没有匹配的内容。',
+    searchSummary: '{a} 处匹配，分布在 {b} 页',
     annotReply: '添加回复',
     annotStamp: '图章',
     stampApproved: '已批准',

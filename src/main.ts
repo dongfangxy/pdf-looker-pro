@@ -17,6 +17,7 @@ import { openFromArrayBuffer, type OpenedDocument } from './viewer/pdf-document.
 import { Viewer, type ViewMode, type ViewerState } from './viewer/viewer.js';
 import { ThumbnailStrip } from './sidebar/thumbnails.js';
 import { renderOutline } from './sidebar/outline.js';
+import { SearchResults } from './sidebar/search-results.js';
 import { AnnotationPanel } from './sidebar/annotations.js';
 import { ToolManager, type ToolName } from './tools/tool-manager.js';
 import { FindIndex } from './tools/find.js';
@@ -70,9 +71,12 @@ const ui = {
   tabThumbnails: mustFind<HTMLButtonElement>('tab-thumbnails'),
   tabOutline: mustFind<HTMLButtonElement>('tab-outline'),
   tabAnnotations: mustFind<HTMLButtonElement>('tab-annotations'),
+  tabSearch: mustFind<HTMLButtonElement>('tab-search'),
   paneThumbnails: mustFind<HTMLElement>('pane-thumbnails'),
   paneOutline: mustFind<HTMLElement>('pane-outline'),
   paneAnnotations: mustFind<HTMLElement>('pane-annotations'),
+  paneSearch: mustFind<HTMLElement>('pane-search'),
+  searchResults: mustFind<HTMLElement>('search-results'),
   thumbnails: mustFind<HTMLElement>('thumbnails'),
   outline: mustFind<HTMLElement>('outline'),
   annotations: mustFind<HTMLElement>('annotations'),
@@ -1425,6 +1429,8 @@ async function runFind(move: 'none' | 'next' | 'prev' = 'none'): Promise<void> {
     findIndex.clear();
     repaintAllHighlights();
     updateFindCount();
+    // Cleared here as well as after a search: an empty bar has its own message.
+    searchResults.setSource(findIndex, '');
     setStatus(i18n.t('findNoQuery'));
     return;
   }
@@ -1437,6 +1443,9 @@ async function runFind(move: 'none' | 'next' | 'prev' = 'none'): Promise<void> {
   }
 
   findIndex.search({ query, caseSensitive: ui.findCase.checked, entireWord: ui.findWord.checked });
+  // After the search, not before it: before, `matches` still holds the previous query's
+  // hits and the list would redraw with results that no longer apply.
+  searchResults.setSource(findIndex, query);
   repaintAllHighlights();
   updateFindCount();
 
@@ -1448,6 +1457,7 @@ async function runFind(move: 'none' | 'next' | 'prev' = 'none'): Promise<void> {
   if (move === 'next') findIndex.next();
   else if (move === 'prev') findIndex.prev();
 
+  searchResults.render();
   const hit = findIndex.currentHit;
   if (hit) viewer.gotoPage(hit.page);
   repaintAllHighlights();
@@ -1474,7 +1484,23 @@ function closeFindBar(): void {
 
 // ------------------------------------------------------------------ sidebar
 
-type TabName = 'thumbnails' | 'outline' | 'annotations';
+type TabName = 'thumbnails' | 'outline' | 'annotations' | 'search';
+
+/** The match list, kept in step with the find bar. */
+const searchResults = new SearchResults(ui.searchResults, {
+  pageLabel: (page) => `${i18n.t('searchResults')} · ${page}`,
+  idleText: () => i18n.t('searchIdle'),
+  emptyText: () => i18n.t('searchEmpty'),
+  summaryText: (matches, pages) =>
+    i18n.t('searchSummary').replace('{a}', String(matches)).replace('{b}', String(pages)),
+  onSelect: (index) => {
+    const hit = findIndex.selectAt(index);
+    repaintAllHighlights();
+    updateFindCount();
+    if (hit) viewer.gotoPage(hit.page);
+    searchResults.render();
+  },
+});
 
 function showTab(which: TabName): void {
   ui.tabThumbnails.classList.toggle('active', which === 'thumbnails');
@@ -1483,6 +1509,9 @@ function showTab(which: TabName): void {
   ui.paneThumbnails.classList.toggle('hidden', which !== 'thumbnails');
   ui.paneOutline.classList.toggle('hidden', which !== 'outline');
   ui.paneAnnotations.classList.toggle('hidden', which !== 'annotations');
+  ui.tabSearch.classList.toggle('active', which === 'search');
+  ui.paneSearch.classList.toggle('hidden', which !== 'search');
+  if (which === 'search') searchResults.render();
   if (which === 'annotations') annotPanel.render();
 }
 
@@ -2576,6 +2605,7 @@ bindCommand(CMD.About, ui.about, {
 bindCommand(CMD.DocProperties, ui.props, { onClick: () => void showProperties() });
 bindCommand(CMD.TabThumbnails, ui.tabThumbnails, { onClick: () => showTab('thumbnails') });
 bindCommand(CMD.TabOutline, ui.tabOutline, { onClick: () => showTab('outline') });
+bindCommand(CMD.TabSearch, ui.tabSearch, { onClick: () => showTab('search') });
 bindCommand(CMD.TabAnnotations, ui.tabAnnotations, { onClick: () => showTab('annotations') });
 bindCommand(CMD.FindPrev, ui.findPrev, { onClick: () => void runFind('prev') });
 bindCommand(CMD.FindNext, ui.findNext, { onClick: () => void runFind('next') });

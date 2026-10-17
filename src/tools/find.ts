@@ -78,6 +78,16 @@ export class FindIndex {
     return this.hits;
   }
 
+  /**
+   * A page's searchable text, as the index sees it.
+   *
+   * Exposed so a result list can quote the surrounding words without re-extracting the
+   * page: the offsets it holds are offsets into exactly this string.
+   */
+  textFor(page: number): string {
+    return this.pages[page - 1]?.haystack ?? '';
+  }
+
   get currentIndex(): number {
     return this.cursor;
   }

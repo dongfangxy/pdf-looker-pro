@@ -34,6 +34,7 @@ export const CMD = {
 
   TabThumbnails: 1060,
   TabOutline: 1061,
+  TabSearch: 1290,
   TabAnnotations: 1062,
 
   // Selection
