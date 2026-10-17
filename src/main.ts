@@ -33,6 +33,7 @@ import { loadResourcePack, type ResourcePack } from './assets/registry.js';
 import { AnnotationLayer, annotationKindForTool } from './annotations/layer.js';
 import { writeAnnotations, type PdfAnnotationInput } from './pdf/annotate.js';
 import { readAnnotations } from './pdf/import.js';
+import { createBlankPdf, createPdfFromJpeg } from './pdf/create.js';
 import { rewritePdf, type PagePlan } from './pdf/rewrite.js';
 import { History } from './annotations/history.js';
 import { PdfDocument } from './pdf/document.js';
@@ -100,6 +101,9 @@ const ui = {
   insertPage: mustFind<HTMLButtonElement>('btn-insert-page'),
   extractPages: mustFind<HTMLButtonElement>('btn-extract-pages'),
   cropPages: mustFind<HTMLButtonElement>('btn-crop-pages'),
+  newBlank: mustFind<HTMLButtonElement>('btn-new-blank'),
+  newImage: mustFind<HTMLButtonElement>('btn-new-image'),
+  reorderPages: mustFind<HTMLButtonElement>('btn-reorder-pages'),
   scroll: mustFind<HTMLDivElement>('scroll-container'),
   dropHint: mustFind<HTMLDivElement>('drop-hint'),
   dropTitle: mustFind<HTMLDivElement>('drop-title'),
@@ -1764,6 +1768,118 @@ async function runPageOperation(operation: PageOperation): Promise<void> {
   setStatus(dropped > 0 ? `${i18n.t('pageOpsDone')}（${dropped} 条批注随页面删除）` : i18n.t('pageOpsDone'));
 }
 
+/** Creates a document of blank pages and opens it. */
+async function newBlankDocument(): Promise<void> {
+  const value = await showInputDialog(i18n, {
+    title: i18n.resolveCommand(CMD.NewBlankDocument)?.title ?? '新建空白文档',
+    label: i18n.t('newDocPages'),
+    initial: '1',
+    numeric: true,
+  });
+  if (value === null) return;
+  const count = Number.parseInt(value.trim(), 10);
+  if (!Number.isFinite(count) || count < 1) {
+    setStatus(i18n.t('pageOpsNoPages'), true);
+    return;
+  }
+  const bytes = createBlankPdf(count);
+  await openDocument(bytes.buffer as ArrayBuffer, i18n.t('untitled'), null);
+  setStatus(`${i18n.t('newDocDone')}：${count} 页`);
+}
+
+/** Asks for an image file without leaving a permanent element in the document. */
+function pickImageFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    let settled = false;
+    const finish = (file: File | null): void => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(file);
+    };
+    input.addEventListener('change', () => finish(input.files?.[0] ?? null));
+    input.addEventListener('cancel', () => finish(null));
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+/**
+ * Builds a one-page PDF from an image file.
+ *
+ * The browser decodes the image and re-encodes it as JPEG, so every format the engine
+ * understands works and the writer only ever has to embed one filter.
+ */
+async function newFromImage(): Promise<void> {
+  const file = await pickImageFile();
+  if (!file) return;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('2D 上下文不可用');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const binary = atob(base64);
+    const jpeg = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) jpeg[i] = binary.charCodeAt(i);
+
+    // Scale so the long side fits a printable page: one pixel of the image need not
+    // become one point of paper.
+    const scale = Math.min(1, 842 / Math.max(bitmap.width, bitmap.height));
+    const pdf = createPdfFromJpeg(jpeg, Math.round(bitmap.width * scale), Math.round(bitmap.height * scale));
+    bitmap.close();
+    const stem = file.name.replace(/\.[^.]+$/, '') || 'image';
+    await openDocument(pdf.buffer as ArrayBuffer, `${stem}.pdf`, null);
+    setStatus(i18n.t('imageDone'));
+  } catch (error) {
+    setStatus(`${i18n.t('imageFailed')}: ${String((error as Error)?.message ?? error)}`, true);
+  }
+}
+
+/** Rearranges the pages into the order the reader types. */
+async function reorderPages(): Promise<void> {
+  const session = activeSession;
+  if (!session?.bytes || !viewer.hasDocument) return;
+  const value = await showInputDialog(i18n, {
+    title: i18n.resolveCommand(CMD.ReorderPages)?.title ?? '页面重排',
+    label: `${i18n.t('reorderLabel')}（${i18n.t('reorderHint')}）`,
+    initial: Array.from({ length: viewer.pageCount }, (_, index) => index + 1).join(','),
+  });
+  if (value === null) return;
+
+  const order = parsePageRange(value, viewer.pageCount);
+  if (order.length !== viewer.pageCount) {
+    setStatus(`${i18n.t('reorderHint')}（当前 ${viewer.pageCount} 页，填写了 ${order.length} 页）`, true);
+    return;
+  }
+
+  setStatus(i18n.t('loading'));
+  let result;
+  try {
+    result = await rewritePdf(new Uint8Array(session.bytes), order.map((page) => ({ sourceIndex: page - 1 })));
+  } catch (error) {
+    setStatus(`${i18n.t('pageOpsFailed')}: ${String((error as Error)?.message ?? error)}`, true);
+    return;
+  }
+  const sourceToTarget = new Map<number, number>();
+  order.forEach((page, index) => {
+    if (!sourceToTarget.has(page)) sourceToTarget.set(page, index + 1);
+  });
+  const dropped = remapAnnotations(sourceToTarget);
+  await replaceDocumentBytes(result.bytes);
+  setStatus(dropped > 0 ? `${i18n.t('reorderDone')}（${dropped} 条批注随页面删除）` : i18n.t('reorderDone'));
+}
+
 /** Loads `<document>.pdf.arpk` when it exists, without failing the document open. */
 /** Loads `<document>.pdf.arpk` when it exists, without failing the document open. */
 async function loadSidecar(): Promise<void> {
@@ -1989,6 +2105,10 @@ function buildMenuDescriptor(): MenuDescriptor {
           // stays available, on a chord of its own.
           command(CMD.SaveIntoPdf, 'CmdOrCtrl+S'),
           { type: 'separator' },
+          command(CMD.NewBlankDocument),
+          command(CMD.NewFromImage),
+          { type: 'separator' },
+          command(CMD.ReorderPages),
           command(CMD.DeletePages),
           command(CMD.RotatePages),
           command(CMD.InsertBlankPage),
@@ -2454,6 +2574,9 @@ bindCommand(CMD.DeletePages, ui.deletePages, { onClick: () => void runPageOperat
 bindCommand(CMD.RotatePages, ui.rotatePages, { onClick: () => void runPageOperation('rotate') });
 bindCommand(CMD.InsertBlankPage, ui.insertPage, { onClick: () => void runPageOperation('insert') });
 bindCommand(CMD.ExtractPages, ui.extractPages, { onClick: () => void runPageOperation('extract') });
+bindCommand(CMD.NewBlankDocument, ui.newBlank, { onClick: () => void newBlankDocument() });
+bindCommand(CMD.NewFromImage, ui.newImage, { onClick: () => void newFromImage() });
+bindCommand(CMD.ReorderPages, ui.reorderPages, { onClick: () => void reorderPages() });
 bindCommand(CMD.CropPages, ui.cropPages, { onClick: () => void runPageOperation('crop') });
 registerCommand(CMD.SaveIntoPdf, () => void saveIntoPdf());
 registerCommand(CMD.Undo, undoAnnotation);

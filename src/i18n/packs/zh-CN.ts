@@ -78,6 +78,9 @@ export const zhCN: LanguagePack = {
     [CMD.InsertBlankPage]: { title: '插入空白页...', tooltip: '在指定位置插入空白页', status: '插入空白页', short: '插入页' },
     [CMD.ExtractPages]: { title: '提取页面...', tooltip: '把选定的页面提取成新文档', status: '提取页面', short: '提取页' },
     [CMD.CropPages]: { title: '裁剪页面...', tooltip: '按页边距裁剪选定页面', status: '裁剪页面', short: '裁剪页' },
+    [CMD.NewBlankDocument]: { title: '新建空白文档...', tooltip: '创建一个只有空白页的新文档', status: '新建空白文档', short: '新建' },
+    [CMD.NewFromImage]: { title: '从图像创建...', tooltip: '把一张图片变成单页 PDF', status: '从图像创建', short: '从图像' },
+    [CMD.ReorderPages]: { title: '页面重排...', tooltip: '按指定顺序重新排列页面', status: '页面重排', short: '重排' },
     [CMD.Undo]: { title: '撤销', tooltip: '撤销上一步批注操作 (Ctrl+Z)', status: '已撤销', short: '撤销' },
     [CMD.Redo]: { title: '重做', tooltip: '重做被撤销的操作 (Ctrl+Shift+Z)', status: '已重做', short: '重做' },
     [CMD.SaveIntoPdf]: { title: '保存', tooltip: '把批注保存进 PDF 文件（Ctrl+S）', status: '已保存', short: '保存' },
@@ -274,6 +277,16 @@ export const zhCN: LanguagePack = {
     pageOpsFailed: '页面操作失败',
     pageOpsNoPages: '没有可操作的页面',
     pageOpsExtracted: '已提取页面',
+
+    newDocPages: '页数',
+    untitled: '未命名.pdf',
+    newDocDone: '已新建空白文档',
+    imagePick: '选择图像文件',
+    imageFailed: '无法读取这张图片',
+    imageDone: '已从图像创建文档',
+    reorderHint: '按想要的顺序填写页码，例如 3,1,2,4-6',
+    reorderLabel: '页面顺序',
+    reorderDone: '页面已重排',
 
     langSwitchFail: '该语言包不可用',
 
