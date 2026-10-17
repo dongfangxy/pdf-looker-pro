@@ -68,6 +68,8 @@ export const CMD = {
 
   // File
   SaveAnnotations: 1130,
+  Undo: 1150,
+  Redo: 1151,
   SaveIntoPdf: 1140,
   ExportAnnotations: 1131,
   OpenRecent: 1132,

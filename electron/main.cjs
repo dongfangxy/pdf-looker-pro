@@ -72,6 +72,7 @@ const PERSISTED_KEYS = [
   'viewMode',
   'theme',
   'showStatusBar',
+  'showSidebar',
   'pageGap',
   'defaultViewMode',
   'defaultZoomMode',

@@ -64,7 +64,9 @@ export const zhCN: LanguagePack = {
     [CMD.ViewFullscreen]: { title: '全屏', tooltip: '进入或退出全屏', status: '切换全屏显示', short: '全屏' },
     [CMD.DocProperties]: { title: '文档属性', tooltip: '查看文档信息', status: '显示文档属性', short: '属性' },
 
-    [CMD.SaveIntoPdf]: { title: '保存到 PDF', tooltip: '把批注写入 PDF 文件本身', status: '正在写入 PDF', short: '写入' },
+    [CMD.Undo]: { title: '撤销', tooltip: '撤销上一步批注操作 (Ctrl+Z)', status: '已撤销', short: '撤销' },
+    [CMD.Redo]: { title: '重做', tooltip: '重做被撤销的操作 (Ctrl+Shift+Z)', status: '已重做', short: '重做' },
+    [CMD.SaveIntoPdf]: { title: '保存', tooltip: '把批注保存进 PDF 文件（Ctrl+S）', status: '已保存', short: '保存' },
     [CMD.SaveAnnotations]: { title: '保存批注', tooltip: '保存批注到边车文件', status: '把批注保存到与 PDF 同名的 .arpk 文件', short: '保存批注' },
     [CMD.ExportAnnotations]: { title: '导出批注为 JSON', tooltip: '导出批注数据', status: '把批注导出为 JSON 文件', short: '导出 JSON' },
     [CMD.OpenRecent]: { title: '最近打开', tooltip: '最近打开的文件', status: '打开最近使用过的文件', short: '最近' },
@@ -199,6 +201,13 @@ export const zhCN: LanguagePack = {
     pdfSaveFailed: '写入 PDF 失败',
     savingPdf: '正在写入 PDF…',
     pdfNoBytes: '当前文档没有可写入的原始数据',
+
+    savedTo: '已保存到',
+    saveReadOnly: '文件不可写入，另存为',
+    undoEmpty: '没有可撤销的操作',
+    redoEmpty: '没有可重做的操作',
+    showSidebar: '显示侧栏',
+    showSidebarHint: '打开时显示缩略图、大纲与批注面板',
 
     langSwitchFail: '该语言包不可用',
 

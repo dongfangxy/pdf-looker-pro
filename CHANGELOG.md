@@ -18,6 +18,17 @@ All notable changes are recorded here. The format follows
   preserved. Both directions are implemented without a third-party PDF library.
 - `Ctrl+S` now writes into the PDF. The sidecar save moved to `Ctrl+Shift+S`.
 
+### Changed
+
+- **Save is one action again.** The separate "write into PDF" verb is gone: `Ctrl+S`
+  now writes the annotations back into the file that is open, overwriting it in place
+  with no dialog. A file that refuses the write falls back to Save As.
+- **`Ctrl+Z` undoes and `Ctrl+Shift+Z` redoes** annotation changes. Rapid edits such
+  as a drag coalesce into one step, so one undo reverses the whole gesture.
+- **The sidebar toggle moved into Settings**, along with the status bar. `Ctrl+B`
+  still works for readers who know it.
+- The toolbar save button is a floppy disk, as tradition demands.
+
 ### Notes
 
 - An encrypted document is refused rather than written to; the security handler is

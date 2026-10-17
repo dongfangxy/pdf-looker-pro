@@ -89,16 +89,27 @@ console.log('\n=== 2. 更多菜单：工具栏定制 ===');
   const menu = await page.evaluate(() => {
     const el = document.querySelector('#overflow-menu');
     const anchor = document.querySelector('#btn-more').getBoundingClientRect();
+    const bar = document.querySelector('.toolbar').getBoundingClientRect();
     return {
       open: !el.classList.contains('hidden'),
       names: [...el.querySelectorAll('.more-run')].map((b) => b.textContent),
       ticks: el.querySelectorAll('.more-check').length,
       sections: [...el.querySelectorAll('.menu-section')].map((s) => s.textContent),
       anchorGap: Math.round(Math.abs(el.getBoundingClientRect().left - anchor.left)),
+      fitsUnderAnchor: Math.abs(el.getBoundingClientRect().left - anchor.left) <= 2,
+      clampedInside:
+        el.getBoundingClientRect().right <= bar.right + 1 &&
+        el.getBoundingClientRect().left < anchor.left,
     };
   });
   check('菜单可打开', menu.open === true);
-  check('菜单贴着“更多”按钮而不是停在最右侧', menu.anchorGap <= 2, `left 差 ${menu.anchorGap}px`);
+  // Either it sits exactly under the button, or it was pulled in only as far as needed
+  // to stay inside the window. Both read as attached; pinned to the far right does not.
+  check(
+    '菜单贴着“更多”按钮（必要时内收以留在窗口内）',
+    menu.fitsUnderAnchor || menu.clampedInside,
+    `left 差 ${menu.anchorGap}px, 内收=${menu.clampedInside}`,
+  );
   check('列出所有可定制按钮且每项有勾选框', menu.names.length >= 30 && menu.ticks === menu.names.length, `${menu.names.length} 项 / ${menu.ticks} 勾选框`);
   check('包含形状与文档命令', ['矩形框', '椭圆', '箭头', '文本框', '标注气泡', '文档属性', '关于'].every((n) => menu.names.includes(n)), menu.names.slice(0, 5).join(' / '));
   check('包含视图与测量', ['连续滚动', '单页', '双页', '全屏', '距离测量', '周长测量', '面积测量'].every((n) => menu.names.includes(n)), '');

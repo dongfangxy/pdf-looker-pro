@@ -69,7 +69,9 @@ export const en: LanguagePack = {
     [CMD.ViewFullscreen]: { title: 'Full screen', tooltip: 'Enter or leave full screen', status: 'Toggle full screen', short: 'Full screen' },
     [CMD.DocProperties]: { title: 'Document properties', tooltip: 'View document information', status: 'Show document properties', short: 'Properties' },
 
-    [CMD.SaveIntoPdf]: { title: 'Save into PDF', tooltip: 'Write the annotations into the PDF file itself', status: 'Writing into the PDF', short: 'Write' },
+    [CMD.Undo]: { title: 'Undo', tooltip: 'Undo the last annotation change (Ctrl+Z)', status: 'Undone', short: 'Undo' },
+    [CMD.Redo]: { title: 'Redo', tooltip: 'Redo the undone change (Ctrl+Shift+Z)', status: 'Redone', short: 'Redo' },
+    [CMD.SaveIntoPdf]: { title: 'Save', tooltip: 'Save the annotations into the PDF (Ctrl+S)', status: 'Saved', short: 'Save' },
     [CMD.SaveAnnotations]: { title: 'Save annotations', tooltip: 'Save annotations to a sidecar file', status: 'Save annotations to a .arpk file beside the PDF', short: 'Save notes' },
     [CMD.ExportAnnotations]: { title: 'Export annotations as JSON', tooltip: 'Export annotation data', status: 'Export annotations to a JSON file', short: 'Export JSON' },
     [CMD.OpenRecent]: { title: 'Open recent', tooltip: 'Recently opened files', status: 'Open a recently used file', short: 'Recent' },
@@ -204,6 +206,13 @@ export const en: LanguagePack = {
     pdfSaveFailed: 'Could not write into the PDF',
     savingPdf: 'Writing into the PDF…',
     pdfNoBytes: 'The open document has no original bytes to update',
+
+    savedTo: 'Saved to',
+    saveReadOnly: 'The file is not writable; save a copy instead',
+    undoEmpty: 'Nothing to undo',
+    redoEmpty: 'Nothing to redo',
+    showSidebar: 'Show the sidebar',
+    showSidebarHint: 'Show thumbnails, outline and annotations when a document opens',
 
     langSwitchFail: 'That language pack is unavailable',
     commandsBound: 'Commands bound',

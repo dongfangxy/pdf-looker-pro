@@ -29,6 +29,7 @@ import { loadResourcePack, type ResourcePack } from './assets/registry.js';
 import { AnnotationLayer, annotationKindForTool } from './annotations/layer.js';
 import { writeAnnotations, type PdfAnnotationInput } from './pdf/annotate.js';
 import { readAnnotations } from './pdf/import.js';
+import { History } from './annotations/history.js';
 import { PdfDocument } from './pdf/document.js';
 import type { PdfValue } from './pdf/syntax.js';
 import { builtinStyles, StyleStore, type AnnotationStyle } from './annotations/styles.js';
@@ -50,7 +51,6 @@ function mustFind<T extends HTMLElement>(id: string): T {
 
 const ui = {
   sidebar: mustFind<HTMLElement>('sidebar'),
-  btnSidebar: mustFind<HTMLButtonElement>('btn-sidebar'),
   tabThumbnails: mustFind<HTMLButtonElement>('tab-thumbnails'),
   tabOutline: mustFind<HTMLButtonElement>('tab-outline'),
   tabAnnotations: mustFind<HTMLButtonElement>('tab-annotations'),
@@ -320,6 +320,7 @@ const ICON_ELEMENTS: Record<string, HTMLElement> = {
   'annot-arrow': ui.annotArrow,
   'annot-textbox': ui.annotTextbox,
   'annot-callout': ui.annotCallout,
+    save: ui.savePdf,
 };
 
 let packReady = false;
@@ -571,11 +572,48 @@ function createSession(name = ''): DocumentSession {
     annotPanel.render();
     void refreshTitle();
     renderTabs();
+    // Coalesced: a drag emits on every pointer move but must undo as one step.
+    history.record(snapshotAnnotations());
   });
   return session;
 }
 
 const styles = new StyleStore();
+
+/**
+ * Undo history for annotations.
+ *
+ * Snapshots of the whole list: it is small, and a snapshot cannot drift out of step
+ * with the model the way a hand-written inverse operation can.
+ */
+const history = new History<string>(JSON.stringify([]));
+
+function snapshotAnnotations(): string {
+  return JSON.stringify(annotations.all);
+}
+
+/** Replaces the annotation list from a snapshot, without marking it clean. */
+function restoreAnnotations(json: string): void {
+  annotations.load(JSON.parse(json) as Annotation[], false);
+  annotationLayer.refreshAll();
+  annotPanel.render();
+  renderTabs();
+  void refreshTitle();
+}
+
+function undoAnnotation(): void {
+  const previous = history.undo();
+  if (previous === null) { setStatus(i18n.t('undoEmpty')); return; }
+  restoreAnnotations(previous);
+  setStatus(i18n.t('undo'));
+}
+
+function redoAnnotation(): void {
+  const next = history.redo();
+  if (next === null) { setStatus(i18n.t('redoEmpty')); return; }
+  restoreAnnotations(next);
+  setStatus(i18n.t('redo'));
+}
 /** Which preset was applied last, so the menu can mark it. */
 let activeStyleId: string | null = null;
 
@@ -757,6 +795,7 @@ const PAGE_GAPS: Record<PageGap, string> = { compact: '4px', normal: '12px', roo
 interface AppSettings {
   theme: ThemeName;
   showStatusBar: boolean;
+  showSidebar: boolean;
   pageGap: PageGap;
   defaultViewMode: ViewMode;
   defaultZoomMode: DefaultZoom;
@@ -765,6 +804,7 @@ interface AppSettings {
 const DEFAULT_APP_SETTINGS: AppSettings = {
   theme: 'dark',
   showStatusBar: true,
+  showSidebar: true,
   pageGap: 'normal',
   defaultViewMode: 'continuous',
   defaultZoomMode: 'fit-width',
@@ -785,6 +825,7 @@ function applyTheme(name: ThemeName): void {
 function applyReadingSettings(): void {
   document.documentElement.style.setProperty('--page-gap', PAGE_GAPS[appSettings.pageGap]);
   ui.statusBar.classList.toggle('hidden', !appSettings.showStatusBar);
+  ui.sidebar.classList.toggle('hidden', !appSettings.showSidebar);
 }
 
 /** Persists settings through the desktop shell, or localStorage in a browser. */
@@ -912,6 +953,13 @@ function buildSettingsFields(): SettingsField[] {
       hint: i18n.t('showStatusBarHint'),
       value: appSettings.showStatusBar,
     },
+    {
+      key: 'showSidebar',
+      kind: 'toggle',
+      label: i18n.t('showSidebar'),
+      hint: i18n.t('showSidebarHint'),
+      value: appSettings.showSidebar,
+    },
   ];
 }
 
@@ -935,6 +983,7 @@ async function openSettings(): Promise<void> {
   const gap = String(result['pageGap'] ?? appSettings.pageGap) as PageGap;
   appSettings.pageGap = gap;
   appSettings.showStatusBar = result['showStatusBar'] === true;
+  appSettings.showSidebar = result['showSidebar'] === true;
   const view = String(result['defaultViewMode'] ?? appSettings.defaultViewMode) as ViewMode;
   const zoom = String(result['defaultZoomMode'] ?? appSettings.defaultZoomMode) as DefaultZoom;
   applyReadingSettings();
@@ -942,7 +991,7 @@ async function openSettings(): Promise<void> {
   const language = String(result['language'] ?? i18n.languageId);
   if (language !== i18n.languageId) i18n.setLanguage(language);
 
-  await persistSettings({ theme, pageGap: gap, showStatusBar: appSettings.showStatusBar, defaultViewMode: view, defaultZoomMode: zoom });
+  await persistSettings({ theme, pageGap: gap, showStatusBar: appSettings.showStatusBar, showSidebar: appSettings.showSidebar, defaultViewMode: view, defaultZoomMode: zoom });
   if (language !== i18n.languageId) await persistSettings({ language } as Partial<AppSettings>);
 
   if (viewer.hasDocument) {
@@ -1273,7 +1322,14 @@ async function exportAnnotationsJson(): Promise<void> {
   }
 
   /** Writes the annotations into the PDF and saves the result as a new file. */
+  /** Debounces a second save landing while the first is still writing. A timestamp
+   * cannot get stuck the way a flag can when an early return is added later. */
+  let lastSaveAt = 0;
+
   async function saveIntoPdf(): Promise<void> {
+    const now = Date.now();
+    if (now - lastSaveAt < 800) return;
+    lastSaveAt = now;
     const session = activeSession;
     if (!session?.bytes) { setStatus(i18n.t('pdfNoBytes'), true); return; }
     if (annotations.count === 0) { setStatus(i18n.t('annotEmpty'), true); return; }
@@ -1287,14 +1343,33 @@ async function exportAnnotationsJson(): Promise<void> {
       return;
     }
     const stem = (session.name || 'document').replace(/\.pdf$/i, '');
-    const suggested = session.path
-      ? `${session.path.replace(/\.pdf$/i, '')}-annotated.pdf`
-      : `${stem}-annotated.pdf`;
     const bridge = desktop;
+
+    /** The document now *is* the written file, so mark it saved and stop there. */
+    const adopt = (path: string): void => {
+      session.bytes = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+      session.path = path;
+      annotations.markSaved();
+      void refreshTitle();
+      setStatus(`${i18n.t('savedTo')} ${path.split(/[\\/]/).pop()}`);
+    };
+
+    // Saving over the file that was opened is what Ctrl+S means everywhere else, so
+    // there is no dialog unless the write is actually refused.
+    if (bridge && session.path) {
+      const result = await bridge.writeFile(session.path, bytes);
+      if (result.ok) {
+        adopt(session.path);
+          return;
+      }
+      setStatus(i18n.t('saveReadOnly'), true);
+    }
+
+    // No path to write to, or the file refused: ask where to put the copy.
     if (bridge) {
       const target = await bridge.saveFileDialog({
-        title: i18n.resolveCommand(CMD.SaveIntoPdf)?.title ?? 'Save into PDF',
-        defaultPath: suggested,
+        title: i18n.resolveCommand(CMD.SaveIntoPdf)?.title ?? 'Save',
+        defaultPath: `${stem}.pdf`,
         filters: [{ name: 'PDF', extensions: ['pdf'] }],
       });
       if (!target) return;
@@ -1303,13 +1378,12 @@ async function exportAnnotationsJson(): Promise<void> {
         setStatus(`${i18n.t('pdfSaveFailed')}: ${result.error ?? target}`, true);
         return;
       }
-      // Re-open the updated file, so the reader now shows what was written.
-      await openPath(target, target.split(/[\\/]/).pop() ?? session.name);
-      setStatus(`${i18n.t('pdfSaved')} → ${target.split(/[\\/]/).pop()}`);
+      adopt(target);
       return;
     }
-    downloadBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${stem}-annotated.pdf`);
-    setStatus(`${i18n.t('pdfSaved')}: ${stem}-annotated.pdf`);
+
+    downloadBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${stem}.pdf`);
+    setStatus(`${i18n.t('pdfSaved')}: ${stem}.pdf`);
   }
 
 /**
@@ -1348,6 +1422,7 @@ async function exportAnnotationsJson(): Promise<void> {
     }
     // Imported annotations are the document's existing state, not unsaved edits.
     annotations.load([...annotations.all], true);
+    history.reset(snapshotAnnotations());
     annotationLayer.refreshAll();
     annotPanel.render();
     void refreshTitle();
@@ -1537,6 +1612,8 @@ function buildMenuDescriptor(): MenuDescriptor {
           // Ctrl+S is the primary save: annotations belong in the PDF now. The sidecar
           // stays available, on a chord of its own.
           command(CMD.SaveIntoPdf, 'CmdOrCtrl+S'),
+          command(CMD.Undo, 'CmdOrCtrl+Z'),
+          command(CMD.Redo, 'CmdOrCtrl+Shift+Z'),
           command(CMD.SaveAnnotations, 'CmdOrCtrl+Shift+S'),
           command(CMD.ExportAnnotations),
           { type: 'separator' },
@@ -1719,6 +1796,8 @@ async function activateSession(session: DocumentSession): Promise<void> {
   annotationLayer.refreshAll();
   annotPanel.render();
   renderTabs();
+  // A freshly opened document starts with an empty history.
+  history.reset(snapshotAnnotations());
   await refreshTitle();
   // Annotations that already live in the file take precedence; the sidecar is only
   // consulted when the PDF itself carried none.
@@ -1865,7 +1944,13 @@ i18n.onChange(() => {
 // -------------------------------------------------------------------- wiring
 
 bindCommand(CMD.Open, ui.open, { onClick: () => void openViaDialog() });
-bindCommand(CMD.Sidebar, ui.btnSidebar, { onClick: () => ui.sidebar.classList.toggle('hidden') });
+// The toolbar toggle is gone: sidebar visibility lives in Settings now. The shortcut
+// and the View menu entry stay, because a reader who knows Ctrl+B still wants it.
+registerCommand(CMD.Sidebar, () => {
+  appSettings.showSidebar = ui.sidebar.classList.contains('hidden');
+  applyReadingSettings();
+  void persistSettings({ showSidebar: appSettings.showSidebar });
+});
 bindCommand(CMD.PrevPage, ui.prev, { onClick: () => viewer.prevPage() });
 bindCommand(CMD.NextPage, ui.next, { onClick: () => viewer.nextPage() });
 bindCommand(CMD.ZoomIn, ui.zoomIn, { onClick: () => viewer.zoomIn() });
@@ -1948,6 +2033,8 @@ registerCommand(CMD.Settings, () => void openSettings());
 registerCommand(CMD.LastPage, () => viewer.gotoPage(viewer.pageCount));
 registerCommand(CMD.SaveAnnotations, () => void saveAnnotations());
 registerCommand(CMD.SaveIntoPdf, () => void saveIntoPdf());
+registerCommand(CMD.Undo, undoAnnotation);
+registerCommand(CMD.Redo, redoAnnotation);
 registerCommand(CMD.ExportAnnotations, () => void exportAnnotationsJson());
 registerCommand(CMD.CloseFile, closeDocument);
 registerCommand(CMD.Exit, () => window.close());
@@ -2046,7 +2133,13 @@ function togglePopup(popup: HTMLElement, button: HTMLElement): void {
   popup.classList.toggle('hidden', !willOpen);
   button.classList.toggle('active', willOpen);
   // Measured after unhiding: a hidden element reports a zero width.
-  if (willOpen) positionPopup(popup, button);
+  if (willOpen) {
+    positionPopup(popup, button);
+    // Measure again once layout has settled. A web font arriving or the toolbar
+    // rewrapping between the first measurement and the paint moved the menu by a
+    // button's width; anchoring it again on the next frame removes that race.
+    requestAnimationFrame(() => positionPopup(popup, button));
+  }
 }
 
 ui.btnMore.addEventListener('click', (event) => {
@@ -2148,6 +2241,37 @@ ui.fileInput.addEventListener('change', () => {
     (err: unknown) => setStatus(`${i18n.t('failed')}: ${String(err)}`, true),
   );
 });
+
+// Shortcuts are handled here as well as on the native menu. A real keystroke is consumed
+// by the menu accelerator before it reaches the page, so only one path runs; synthetic
+// key events in the verification suites never reach the menu, so this is what they
+// exercise.
+window.addEventListener('keydown', (event) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    // A text field owns its own clipboard and undo behaviour.
+    const target = event.target as HTMLElement | null;
+    const typing =
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target?.isContentEditable === true;
+    const key = event.key.toLowerCase();
+    if (key === 'z' && !typing) {
+      event.preventDefault();
+      if (event.shiftKey) redoAnnotation();
+      else undoAnnotation();
+      return;
+    }
+    if (key === 's' && !typing) {
+      event.preventDefault();
+      if (event.shiftKey) void saveAnnotations();
+      else void saveIntoPdf();
+      return;
+    }
+    if (key === 'f' && !typing) {
+      event.preventDefault();
+      openFindBar();
+    }
+  });
 
 ui.pageInput.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;

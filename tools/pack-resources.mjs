@@ -36,6 +36,12 @@ const ICONS = {
     <path ${STROKE} d="M8 5h8M8 19h8M12 5v14"/>
     <rect ${STROKE} x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 3"/>`,
 
+  // A floppy disk: the shape everyone still reads as "save".
+  save: `
+    <path ${STROKE} d="M4 5.5A1.5 1.5 0 0 1 5.5 4h9.8L20 8.6v9.9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z"/>
+    <path ${STROKE} d="M8 4v5.5h6.5V4"/>
+    <path ${STROKE} d="M7.5 13.5h9v6.5h-9z"/>`,
+
   // Magnifier.
   'tool-zoom': `
     <circle ${STROKE} cx="10.5" cy="10.5" r="6"/>
