@@ -90,6 +90,7 @@ export const en: LanguagePack = {
     [CMD.FlattenAnnotations]: { title: 'Flatten annotations...', tooltip: 'Draw the annotations into the page and remove them', status: 'Flatten annotations', short: 'Flatten' },
     [CMD.AnnotStamp]: { title: 'Stamp', tooltip: 'Click on the page to place a stamp', status: 'Place a stamp', short: 'Stamp' },
     [CMD.StampPick]: { title: 'Choose stamp...', tooltip: 'Switch to another standard stamp', status: 'Choose stamp', short: 'Stamp style' },
+    [CMD.SaveSearch]: { title: 'Save this search...', tooltip: 'Name the current term so it can be re-run in one click', status: 'Save search', short: 'Save search' },
     [CMD.SearchFolder]: { title: 'Search a folder...', tooltip: 'Look for the current term across a whole folder', status: 'Search a folder', short: 'Folder search' },
     [CMD.SummaryAnnotations]: { title: 'Summarise annotations...', tooltip: 'Gather the annotated pages into a new document', status: 'Summarise annotations', short: 'Summary' },
     [CMD.Undo]: { title: 'Undo', tooltip: 'Undo the last annotation change (Ctrl+Z)', status: 'Undone', short: 'Undo' },
@@ -300,6 +301,10 @@ export const en: LanguagePack = {
     reorderDone: 'Pages reordered',
 
     searchResults: 'Search results',
+    savedSearches: 'Saved searches',
+    searchName: 'Name this search',
+    searchSaved: 'Search saved',
+    searchRemoved: 'Saved search removed',
     folderPath: 'Folder path',
     folderPathHint: 'PDFs in this folder and its subfolders are searched',
     folderScanning: 'Searching the folder...',

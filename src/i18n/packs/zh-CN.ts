@@ -85,6 +85,7 @@ export const zhCN: LanguagePack = {
     [CMD.FlattenAnnotations]: { title: '展平注释...', tooltip: '把注释画进页面内容并移除批注', status: '展平注释', short: '展平' },
     [CMD.AnnotStamp]: { title: '图章', tooltip: '在页面上点一下放置图章', status: '放置图章', short: '图章' },
     [CMD.StampPick]: { title: '选择图章样式...', tooltip: '换用另一种标准图章', status: '选择图章', short: '图章样式' },
+    [CMD.SaveSearch]: { title: '保存当前搜索...', tooltip: '给当前关键词起个名字，以后一键重跑', status: '保存搜索', short: '保存搜索' },
     [CMD.SearchFolder]: { title: '在文件夹中搜索...', tooltip: '在整个文件夹里查找当前关键词', status: '在文件夹中搜索', short: '文件夹搜索' },
     [CMD.SummaryAnnotations]: { title: '总括注释...', tooltip: '把带注释的页面汇总成一份新文档', status: '总括注释', short: '总括' },
     [CMD.Undo]: { title: '撤销', tooltip: '撤销上一步批注操作 (Ctrl+Z)', status: '已撤销', short: '撤销' },
@@ -295,6 +296,10 @@ export const zhCN: LanguagePack = {
     reorderDone: '页面已重排',
 
     searchResults: '搜索结果',
+    savedSearches: '已保存的搜索',
+    searchName: '给这个搜索起个名字',
+    searchSaved: '搜索已保存',
+    searchRemoved: '已删除保存的搜索',
     folderPath: '文件夹路径',
     folderPathHint: '会递归查找该文件夹及其子文件夹里的 PDF',
     folderScanning: '正在搜索文件夹…',

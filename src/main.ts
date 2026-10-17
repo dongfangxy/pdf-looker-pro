@@ -17,6 +17,13 @@ import { openFromArrayBuffer, type OpenedDocument } from './viewer/pdf-document.
 import { Viewer, type ViewMode, type ViewerState } from './viewer/viewer.js';
 import { ThumbnailStrip } from './sidebar/thumbnails.js';
 import { renderOutline } from './sidebar/outline.js';
+import {
+  addSavedSearch,
+  loadSavedSearches,
+  removeSavedSearch,
+  saveSavedSearches,
+  type SavedSearch,
+} from './search/saved.js';
 import { SearchResults, type ExternalHit } from './sidebar/search-results.js';
 import { AnnotationPanel } from './sidebar/annotations.js';
 import { ToolManager, type ToolName } from './tools/tool-manager.js';
@@ -120,6 +127,7 @@ const ui = {
   reorderPages: mustFind<HTMLButtonElement>('btn-reorder-pages'),
   summary: mustFind<HTMLButtonElement>('btn-summary'),
   searchFolder: mustFind<HTMLButtonElement>('btn-search-folder'),
+  saveSearch: mustFind<HTMLButtonElement>('btn-save-search'),
   flatten: mustFind<HTMLButtonElement>('btn-flatten'),
   annotStamp: mustFind<HTMLButtonElement>('annot-stamp'),
   stampPick: mustFind<HTMLButtonElement>('btn-stamp-pick'),
@@ -1488,6 +1496,71 @@ function closeFindBar(): void {
 type TabName = 'thumbnails' | 'outline' | 'annotations' | 'search';
 
 /** The match list, kept in step with the find bar. */
+/**
+ * Saved searches, kept in storage.
+ *
+ * The last folder a search ran against is remembered with it: a saved search that has
+ * forgotten where it was pointed can only be re-run after the reader finds the folder
+ * again, which is the part they were trying to avoid.
+ */
+let savedSearches: SavedSearch[] = loadSavedSearches();
+
+/** Tells the panel what is saved, so the list is never out of step with storage. */
+function refreshSavedSearches(): void {
+  searchResults.setSaved(
+    savedSearches.map((item) => ({ id: item.id, name: item.name, query: item.query })),
+  );
+}
+
+/** Runs a saved search again. */
+function applySavedSearch(id: string): void {
+  const item = savedSearches.find((entry) => entry.id === id);
+  if (!item) return;
+  ui.findInput.value = item.query;
+  ui.findCase.checked = item.caseSensitive;
+  ui.findWord.checked = item.entireWord;
+  openFindBar();
+  void runFind('none');
+}
+
+/** Asks for a name and stores the current term under it. */
+async function saveCurrentSearch(): Promise<void> {
+  const query = ui.findInput.value.trim();
+  if (query === '') {
+    openFindBar();
+    setStatus(i18n.t('findNoQuery'), true);
+    return;
+  }
+  const name = await showInputDialog(i18n, {
+    title: i18n.resolveCommand(CMD.SaveSearch)?.title ?? '保存当前搜索',
+    label: i18n.t('searchName'),
+    initial: query,
+    confirm: i18n.t('pageOpsConfirm'),
+    cancel: i18n.t('printCancel'),
+  });
+  if (name === null || name.trim() === '') return;
+
+  savedSearches = addSavedSearch(savedSearches, {
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    name: name.trim(),
+    query,
+    caseSensitive: ui.findCase.checked,
+    entireWord: ui.findWord.checked,
+    scope: 'document',
+  });
+  saveSavedSearches(savedSearches);
+  refreshSavedSearches();
+  setStatus(`${i18n.t('searchSaved')}：${name.trim()}`);
+}
+
+/** Forgets a saved search. */
+function deleteSavedSearch(id: string): void {
+  savedSearches = removeSavedSearch(savedSearches, id);
+  saveSavedSearches(savedSearches);
+  refreshSavedSearches();
+  setStatus(i18n.t('searchRemoved'));
+}
+
 const searchResults = new SearchResults(ui.searchResults, {
   pageLabel: (page) => `${i18n.t('searchResults')} · ${page}`,
   idleText: () => i18n.t('searchIdle'),
@@ -1495,6 +1568,9 @@ const searchResults = new SearchResults(ui.searchResults, {
   summaryText: (matches, pages) =>
     i18n.t('searchSummary').replace('{a}', String(matches)).replace('{b}', String(pages)),
   onOpenExternal: (path, page) => void openSearchHit(path, page),
+  onApplySaved: (id) => applySavedSearch(id),
+  onDeleteSaved: (id) => deleteSavedSearch(id),
+  savedLabel: () => i18n.t('savedSearches'),
   onSelect: (index) => {
     const hit = findIndex.selectAt(index);
     repaintAllHighlights();
@@ -2200,6 +2276,7 @@ function buildMenuDescriptor(): MenuDescriptor {
           command(CMD.RotatePages),
           command(CMD.InsertBlankPage),
           command(CMD.ExtractPages),
+          command(CMD.SaveSearch),
           command(CMD.SearchFolder),
           command(CMD.SummaryAnnotations),
           command(CMD.FlattenAnnotations),
@@ -2786,6 +2863,7 @@ bindCommand(CMD.InsertBlankPage, ui.insertPage, { onClick: () => void runPageOpe
 bindCommand(CMD.ExtractPages, ui.extractPages, { onClick: () => void runPageOperation('extract') });
 bindCommand(CMD.NewBlankDocument, ui.newBlank, { onClick: () => void newBlankDocument() });
 bindCommand(CMD.NewFromImage, ui.newImage, { onClick: () => void newFromImage() });
+bindCommand(CMD.SaveSearch, ui.saveSearch, { onClick: () => void saveCurrentSearch() });
 bindCommand(CMD.SearchFolder, ui.searchFolder, { onClick: () => void searchFolder() });
 bindCommand(CMD.SummaryAnnotations, ui.summary, { onClick: () => void summarizeAnnotations() });
 bindCommand(CMD.FlattenAnnotations, ui.flatten, { onClick: () => void flattenAnnotations() });
@@ -3556,6 +3634,7 @@ applyStrings();
 updateToolButtons(tools.tool);
 setViewMode('continuous');
 void initResources().then(() => initDesktop());
+refreshSavedSearches();
 void loadAppSettings();
 void loadRecents().then(() => refreshMenu());
 

@@ -43,6 +43,24 @@ All notable changes are recorded here. The format follows
   continuous facing.
 - **View history** on `Alt+Left` / `Alt+Right`, and a go-to-page dialogue on `Ctrl+G`.
 
+### Added
+
+- **Whole-document rewrite.** Rebuilds the page tree, copies every object through and
+  recomputes the cross-reference, which is what makes deleting, reordering, inserting,
+  extracting and cropping pages possible at all.
+- **Page operations** with a dialogue for a range: delete, rotate, insert blank pages,
+  extract, crop and reorder. Annotations travel with their pages.
+- **New documents** — blank pages, or a single page from an image.
+- **Standard stamps**, written as `/Stamp` with the `/Name` other readers recognise.
+- **Annotation replies**, written as `/IRT` annotations so a thread survives a save.
+- **A named author**, written as `/T` and read back on open.
+- **Flatten** annotations into the page, and **summarise** the annotated pages into a
+  new document.
+- **A search panel** listing matches by page, **folder search** across documents, and
+  **saved searches** that re-run in one click.
+- **A magnifier** and **printing**, **actual size** and **fit visible area**, **view
+  history** on `Alt`+arrows, and four view modes.
+
 ### Notes
 
 - An encrypted document is refused rather than written to; the security handler is

@@ -17,6 +17,12 @@ export interface ExternalHit {
   after: string;
 }
 
+export interface SavedSearchView {
+  id: string;
+  name: string;
+  query: string;
+}
+
 export interface SearchResultsOptions {
   /** Go to a match, by index into the current match list. */
   onSelect(index: number): void;
@@ -26,6 +32,14 @@ export interface SearchResultsOptions {
   emptyText(): string;
   /** Text shown before a search has been run. */
   idleText(): string;
+  /** Heading above the saved-search list. */
+  savedLabel?(): string;
+
+  /** Run a saved search again. */
+  onApplySaved?(id: string): void;
+  /** Forget a saved search. */
+  onDeleteSaved?(id: string): void;
+
   /** Open a match found outside the current document. */
   onOpenExternal?(path: string, page: number): void;
 
@@ -44,8 +58,18 @@ export class SearchResults {
   /** Hits from a folder search, which replace the in-document list while shown. */
   private external: ExternalHit[] | null = null;
   private externalNote = '';
+  private saved: SavedSearchView[] = [];
   private readonly onActivate = (event: MouseEvent): void => {
     const target = event.target as HTMLElement | null;
+    const saved = target?.closest<HTMLElement>('[data-saved-id]');
+    if (saved) {
+      const id = saved.dataset['savedId'];
+      if (id) {
+        if (target?.closest('[data-action="forget"]')) this.options.onDeleteSaved?.(id);
+        else this.options.onApplySaved?.(id);
+      }
+      return;
+    }
     const external = target?.closest<HTMLElement>('[data-file-path]');
     if (external) {
       const path = external.dataset['filePath'];
@@ -74,6 +98,12 @@ export class SearchResults {
     this.render();
   }
 
+  /** Replaces the saved-search list shown above the results. */
+  setSaved(items: readonly SavedSearchView[]): void {
+    this.saved = [...items];
+    this.render();
+  }
+
   /** Shows hits gathered from a folder, grouped by file and page. */
   setExternal(query: string, hits: ExternalHit[], note = ''): void {
     this.external = hits;
@@ -84,6 +114,7 @@ export class SearchResults {
 
   render(): void {
     this.host.replaceChildren();
+    this.renderSaved();
     if (this.external !== null) {
       this.renderExternal();
       return;
@@ -153,6 +184,41 @@ export class SearchResults {
       }
     }
   }
+  /** The saved-search list, shown above whatever the current search produced. */
+  private renderSaved(): void {
+    if (this.saved.length === 0) return;
+
+    const heading = document.createElement('div');
+    heading.className = 'search-summary';
+    heading.textContent = this.options.savedLabel?.() ?? '';
+    this.host.appendChild(heading);
+
+    for (const item of this.saved) {
+      const row = document.createElement('div');
+      row.className = 'search-saved';
+      row.dataset['savedId'] = item.id;
+
+      const name = document.createElement('button');
+      name.type = 'button';
+      name.className = 'search-saved-name';
+      name.textContent = item.name;
+      name.title = item.query;
+
+      const query = document.createElement('span');
+      query.className = 'search-saved-query';
+      query.textContent = item.query;
+
+      const forget = document.createElement('button');
+      forget.type = 'button';
+      forget.className = 'search-saved-forget';
+      forget.dataset['action'] = 'forget';
+      forget.textContent = '✕';
+
+      row.append(name, query, forget);
+      this.host.appendChild(row);
+    }
+  }
+
 /** Renders the folder-search list, grouped by file and then by page. */
   private renderExternal(): void {
     const hits = this.external ?? [];

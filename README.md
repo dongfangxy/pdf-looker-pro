@@ -36,6 +36,10 @@ use for reading and marking up papers.
 - **Find** with match highlighting (`Ctrl+F`)
 - **Zoom** to fit width or page, free zoom, `Ctrl` + wheel
 - **Rotate** in 90° steps
+- **Actual size** and **fit visible area**, alongside fit width and fit page
+- **A magnifier** that follows the pointer, read from the rendered page itself
+- **Previous and next view** on `Alt`+`←` / `Alt`+`→`
+- **Print** with a page range, scale and orientation (`Ctrl+P`)
 - **Outline, thumbnails and an annotation list** in a collapsible sidebar
 - **Four themes** — light, dark, sepia and high contrast
 - **Chinese and English** throughout, switchable at runtime
@@ -55,6 +59,11 @@ use for reading and marking up papers.
 - **Adjustable colour, line style, line width and text size**, applied to the selection or
   to the next annotation
 - **Style presets** — save the current combination under a name and reuse it
+- **Six standard stamps** — approved, confidential, draft, reviewed, void, final —
+  written as `/Stamp` with the name other readers recognise
+- **Replies**, written as `/IRT` annotations so other readers show the thread
+- **A named author** on every annotation, written as `/T`
+- **Flatten** annotations into the page, or **summarise** the annotated pages
 
 ### Measuring
 
@@ -70,6 +79,16 @@ use for reading and marking up papers.
 - **Existing PDF annotations are read back** when you open a file that has them
 - **Export** the current page as an image, or annotations as JSON or `.arpk`
 - **Native menu, recent files and window geometry**, restored between launches
+
+### The document
+
+- **A whole-document rewrite** — rebuilds the page tree, copies every object through
+  and recomputes the cross-reference, so pages can be deleted, reordered and inserted
+- **Delete, rotate, insert, extract, crop and reorder** page ranges, with annotations
+  travelling with their pages
+- **New blank documents**, and **one-page documents from an image**
+- **A search panel** listing every match by page, **folder search** across documents,
+  and **saved searches** that re-run in one click
 
 ## Download
 
