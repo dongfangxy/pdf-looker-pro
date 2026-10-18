@@ -900,6 +900,13 @@ async function saveCurrentStyle(): Promise<void> {
   setStatus(`${i18n.t('styleSaved')}: ${style.name}`);
 }
 
+/**
+ * The command a panel row is labelled with.
+ *
+ * Every kind is mapped: falling back to a default labelled every shape, every stamp and
+ * both text tools as a rectangle, which made the panel's list useless for telling them
+ * apart.
+ */
 function kindCommandId(kind: AnnotKind): number {
   switch (kind) {
     case 'highlight':
@@ -908,14 +915,30 @@ function kindCommandId(kind: AnnotKind): number {
       return CMD.AnnotUnderline;
     case 'strikeout':
       return CMD.AnnotStrikeout;
+    case 'replace':
+      return CMD.AnnotReplace;
     case 'ink':
       return CMD.AnnotInk;
     case 'note':
       return CMD.AnnotNote;
-    case 'replace':
-      return CMD.AnnotReplace;
-    default:
+    case 'rect':
       return CMD.AnnotRect;
+    case 'ellipse':
+      return CMD.AnnotEllipse;
+    case 'arrow':
+      return CMD.AnnotArrow;
+    case 'textbox':
+      return CMD.AnnotTextbox;
+    case 'callout':
+      return CMD.AnnotCallout;
+    case 'measure-distance':
+      return CMD.AnnotMeasureDistance;
+    case 'measure-perimeter':
+      return CMD.AnnotMeasurePerimeter;
+    case 'measure-area':
+      return CMD.AnnotMeasureArea;
+    case 'stamp':
+      return CMD.AnnotStamp;
   }
 }
 

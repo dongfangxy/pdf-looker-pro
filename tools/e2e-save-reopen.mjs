@@ -155,6 +155,21 @@ console.log('\n=== 2b. 文字工具点已有批注不会叠一个空框 ===');
   await page.click('#tab-annotations');
   await page.waitForTimeout(300);
 }
+
+console.log('\n=== 2c. 面板给每种批注正确的名字 ===');
+{
+  const labels = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.annot-row')];
+    return rows.map((row) => ({
+      kind: row.querySelector('.annot-kind')?.textContent ?? '',
+      text: row.querySelector('.annot-text')?.textContent ?? '',
+    }));
+  });
+  const kinds = labels.map((l) => l.kind);
+  check('打字机没有被标成矩形框', kinds.includes('打字机'), JSON.stringify(kinds));
+  check('高亮也没有被标错', kinds.includes('高亮'), JSON.stringify(kinds));
+  check('两行标签互不相同', new Set(kinds).size === kinds.length, JSON.stringify(kinds));
+}
 console.log('\n=== 3. 反复保存不会把批注复制成两份 ===');
 {
   await saveAndStage();
