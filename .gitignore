@@ -14,3 +14,6 @@ paper/*.aux
 paper/*.log
 paper/*.out
 paper/preview/
+
+# One-off operational script for driving arXiv's submission UI; not part of the suite.
+tools/arxiv-drive.mjs

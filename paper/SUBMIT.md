@@ -82,17 +82,62 @@ permanent and cannot be revised for a given version.
 If the paper is intended for a specific journal, check that journal's preprint policy first:
 several allow CC BY, some require the arXiv licence plus an embargo.
 
-## 4. Two things that may stop the submission
+## 4. The blocker that actually stopped it: endorsement for `cs`
 
-**Endorsement.** A first submission in a category can require an endorsement code from an
-established author in that category. If arXiv asks, the submission cannot proceed until you
-have one — this is a property of your account's history, not of the paper.
+A first attempt on 2026-10-18 reached arXiv's start page and stopped there. The archive
+dropdown offered **only `eess`**, so neither `cs` nor `cs.SE` could be chosen, and the form
+refused to advance with *You must select an archive*.
+
+The cause is account-level and visible on <https://arxiv.org/user/>:
+
+| Field | Value |
+|---|---|
+| Groups | `eess` |
+| Default category | `eess.SY` |
+| E-mail | `dongfangxy@163.com` (not an institutional address) |
+
+arXiv accepts a submission only into a group the account belongs to, and an account joins a
+group by being **endorsed** for it. Per <https://info.arxiv.org/help/endorsement.html>,
+endorsement is required before a first submission to arXiv or to a new category. Three routes
+exist, cheapest first:
+
+1. **Claim authorship of work already on arXiv.** The account page offers *Claim Authorship*
+   and a paper-password form, and lists an unclaimed identifier (`2608.11549`). Claiming
+   papers you wrote is the cheapest route and also makes your other work findable under your
+   name.
+2. **Use an institutional address.** With claimed papers *and* an institutional e-mail
+   (`…@jiangnan.edu.cn`), arXiv can grant endorsement without a human endorser.
+3. **Ask a colleague for a personal endorsement code.** The endorser generates a
+   six-character code; it is entered at <https://arxiv.org/auth/endorse>. Choose someone who
+   publishes in computer science on arXiv and knows the work.
+
+Submitting to `eess` instead would be a miscategorisation: arXiv classifies by content, and
+moderation declines papers that do not fit their category.
+
+### The incomplete submission that is waiting
+
+Submission `8247521` exists and stays resumable until **2026-11-01**. A rejected validation
+clears the form, so none of the choices below are stored — they are listed here so they can be
+re-entered in one pass after endorsement:
+
+- contact information certified
+- submission agreement accepted
+- authorship: *I am submitting as an author of this article*
+- licence: **CC BY 4.0**
+- archive `cs`, subject class `cs.SE`, cross-list `cs.HC`
+- upload `arxiv-submission.zip`
+
+Resume at <https://arxiv.org/submit/8247521/resume>, or delete it from the user page to start
+afresh.
+
+## 4b. What still applies once the archive is selectable
 
 **Moderation.** Submissions are announced only after moderation, typically a day or two. A
 paper describing a single piece of software may attract a question about research
 contribution; `sections/08-evaluation.tex` and the abstract are written to answer it
 (invariants, verification methodology, measured costs), and the acknowledgements disclose
 how the work was produced.
+
 
 ## 5. After it is announced
 
