@@ -67,13 +67,28 @@ return values, and why the paper reports the defects that reached a user as well
 the suites caught.
 
 The application is 17{,}323 lines of source over 47 files with one runtime dependency, MIT
-licensed, and available with its tests, its measurement scripts and the scripts that rebuilt
-every figure in this paper at \repo.
+licensed, and available with its tests and the scripts that rebuilt every figure here at \repo.
 
 \section*{Acknowledgements}
 
-The annotation model's dual representation, the coordinate convention of
-\S\ref{sec:annotations} and the decision to write into the document rather than beside it were
-all consequences of using the software daily while building it. The pdf.js project
-(\cite{pdfjs}) does the rendering; the writer's invariants were learned by breaking them.
+The software described here was developed with the assistance of \textbf{DeepSeek AI} and of
+\textbf{DSH} (DeepSeek Harness), the agent harness built on it, and this preprint was
+researched, drafted and revised with the same assistance. The debt is not incidental to the
+result. The invariant that makes annotation deletion work (\S\ref{sec:incremental}), the
+decision to materialise inheritance before flattening a page tree (\S\ref{sec:rewrite}), and
+the harness defects recorded in \S\ref{sec:verification} were all arrived at in the course of
+that collaboration, and the manuscript was argued out the same way.
+
+It is in that spirit --- and because a program that expects its behaviour to be checked should
+let its readers check it --- that all of this software is released as open source, with nothing
+held back. The disclosure is deliberate: a reader is entitled to know how a document was
+produced, as a reader of the source is entitled to see every line of it.
+
+The dual representation of \S\ref{sec:annotations}, the coordinate convention and the decision
+to write into the document rather than beside it came from using the software daily while
+building it. The pdf.js project~\cite{pdfjs} does the rendering; the writer's invariants were
+learned by breaking them.
+
+I thank \textbf{\begin{CJK*}{UTF8}{gbsn}梁圣人\end{CJK*}} (Liang Shengren), and this remarkable era, in which such an
+undertaking is within reach of one person with a laptop and a good interlocutor.
 

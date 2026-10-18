@@ -59,7 +59,8 @@ archive must contain everything `main.tex` reaches and nothing it does not.
 2. Metadata to enter on arXiv:
 
    - **Title** — `PDF Looker Pro: an open-source annotating PDF reader and document editor`
-   - **Authors** — `Chengxi Zhang`
+   - **Authors** — `Chengxi Zhang` (Jiangnan University, Wuxi 214122, China;
+     ORCID 0000-0002-3130-6497; https://dongfangxy.github.io/)
    - **Primary category** — `cs.SE` (Software Engineering)
    - **Cross-list** — `cs.HC` (Human-Computer Interaction)
    - **Comments** — `15 pages, 5 tables, 2 figures. Source code and verification suites:
@@ -72,6 +73,25 @@ archive must contain everything `main.tex` reaches and nothing it does not.
 3. Check the compiled PDF arXiv produces against the local one. arXiv's editor is not
    identical to a local TeX Live install; a difference usually means a package is missing
    from the archive.
+
+## Two build dependencies worth knowing
+
+**CJK.** The author name and one personal name in the acknowledgements are typeset with
+`CJKutf8` and the `gbsn` font, which ships in TeX Live's `arphic` package
+(`collection-langchinese`). A full TeX Live installation has it; arXiv's does. If a minimal
+installation lacks it, the build still succeeds with a font-substitution warning and the
+characters render; if they do not, the only CJK in the document is those two names and they
+can be replaced with their pinyin.
+
+**No other dependency.** No BibTeX pass, no shell escape, no external tool.
+
+## Disclosure
+
+The Acknowledgements state that the software and this preprint were developed with the
+assistance of DeepSeek AI and DSH (DeepSeek Harness), that this is the reason the software is
+released as open source in full, and that the authors thank 梁圣人 (Liang Shengren) and this
+era. The disclosure is deliberate and should not be edited out before submission: a reader is
+entitled to know how a document was produced.
 
 ## What the paper does and does not claim
 
