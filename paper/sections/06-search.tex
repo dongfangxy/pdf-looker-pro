@@ -1,0 +1,68 @@
+\section{Search}
+\label{sec:search}
+
+\subsection{Matching and highlighting}
+
+The document's text is not available as a string; it is a set of positioned glyph runs in a
+text layer. The find index concatenates each page's run strings into one haystack and records
+the run boundaries, so a match is an offset into a page's concatenated text plus a length.
+
+Highlighting does not compute its own geometry. It rewrites the text layer's spans, splitting
+a span at the match boundaries and wrapping the remainder in a \texttt{<mark>}-like element,
+which is the technique pdf.js uses internally. The benefit is that a painted match is aligned
+with the painted glyphs \emph{by construction}: there is no second coordinate computation that
+could disagree with the first.
+
+Because the index and the layer are separate, they can disagree. Before painting, the page's
+live span strings are compared with the strings the index was built from; a page that does not
+match is skipped rather than mis-highlighted. In practice this triggers when a page's text
+layer is re-rendered between indexing and searching --- on a fast scroll through a document
+whose index is still being built --- and skipping is the correct answer, since the offsets no
+longer mean what they did.
+
+\subsection{Result presentation}
+
+Results are grouped by page, in document order, each row quoting the words around the match.
+The quote comes from the index itself rather than from re-extracting the page: the offsets a
+hit holds are offsets into exactly that string, so the snippet cannot drift from the
+highlight.
+
+Two ordering defects are worth recording because both produced a screen that contradicted
+itself. First, the panel was told about a query \emph{before} the search ran, so it redrew from
+the previous query's matches; because the zero-hit path returns early, nothing redrew
+afterwards, and a search for nonsense left twenty-two results beside a status bar saying there
+were none. Second, a match list is a view of mutable state: the ``current'' row must be
+re-derived whenever the index changes, not only when the user moves to the next match.
+
+\subsection{Folder search across documents}
+\label{sec:folder-search}
+
+Searching a folder means reading files the user has not opened. The application's desktop shell
+refuses to read any path the user has not granted, so listing a folder also \emph{grants} the
+files it finds: a folder the user types is as explicit a permission as one chosen from a
+dialog, and the grant is what lets the scan proceed. Depth and file count are bounded, and a
+file that will not parse is skipped rather than fatal --- one damaged document in a folder
+should not stop the search.
+
+Each file is opened on its own and released again. A folder search is a scan, not a shelf of
+open documents; holding every parsed document would cost far more memory than it saves, and
+\S\ref{sec:eval} shows the index is cheap enough to rebuild.
+
+\subsection{Saved searches}
+
+A saved search stores the question, not the answer: the query, the case and whole-word flags,
+and the folder when there was one. The hits go stale the moment a document changes, and
+re-running is the point. Saving under a name that already exists replaces it, so re-saving
+updates rather than accumulating near-duplicates, and an entry with no name or no query is
+dropped on read rather than repaired.
+
+\subsection{Form fields, without a form layer}
+\label{sec:fields}
+
+The viewer highlights form fields --- tinting the rectangles of \texttt{/Widget} annotations so
+a reader can see where a form asks for input --- and does not claim to fill them. The
+distinction matters for the paper because it is the honest boundary of the feature: detecting
+a widget needs the page's annotation array, while filling one needs the field's own hierarchy
+(an \texttt{/AcroForm} dictionary, field types, appearance streams, calculation order and
+validation), which this application does not implement. Highlighting without filling is
+useful and truthful; a half-implemented form layer would be neither.

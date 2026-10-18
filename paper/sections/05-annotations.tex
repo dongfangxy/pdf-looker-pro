@@ -1,0 +1,96 @@
+\section{The annotation model}
+\label{sec:annotations}
+
+\subsection{Geometry}
+
+An annotation stores its geometry in unrotated page space at scale~1, origin top-left, $y$
+increasing downwards. Four consequences follow, all of them the reason for the choice:
+
+\begin{itemize}
+  \item a zoom changes a scale factor and nothing else;
+  \item a rotation changes the transform used to paint, not the coordinates stored;
+  \item a view-mode change (single, continuous, facing, facing-continuous) does not touch the
+        model at all;
+  \item hit testing compares a point in the same space, so it is a rectangle test rather than
+        an inverse projection.
+\end{itemize}
+
+PDF user space is the mirror image, with an origin at the bottom-left and a scale given by the
+page's \texttt{/UserUnit}, so writing an annotation is an explicit
+\texttt{toScreen}/\texttt{fromScreen} conversion in one place
+(\texttt{src/annotations/layer.ts}). Keeping that conversion in one function, rather than
+inline at each use, is what made it possible to add rotated pages without auditing a dozen
+call sites.
+
+\subsection{Kinds and the dual representation}
+\label{sec:annot-model}
+
+Fifteen kinds are modelled. Twelve of them draw or carry text: highlight, underline,
+strikeout, \emph{replace text}, freehand ink, sticky note, rectangle, ellipse, arrow,
+typewriter (the original product's name for a free text box), callout text, and stamp --- where
+stamp takes one of six standard names. The remaining three are measurements: distance,
+perimeter and area.
+
+Each is written as a standard subtype, so that other readers display it:
+\texttt{/Highlight}, \texttt{/Underline}, \texttt{/StrikeOut}, \texttt{/Ink}, \texttt{/Text},
+\texttt{/Square}, \texttt{/Circle}, \texttt{/Line}, \texttt{/FreeText}, \texttt{/PolyLine},
+\texttt{/Polygon}, \texttt{/Stamp}. Alongside, a private \texttt{/PLP} dictionary carries
+\texttt{/K} (the exact kind), \texttt{/W} (stroke width), \texttt{/D} (dash) and
+\texttt{/F} (font size). Readers that do not know \texttt{/PLP} ignore it; this one prefers it
+on load and falls back to inferring a kind from the subtype, which is how annotations made in
+other applications are displayed with sensible defaults.
+
+\paragraph{The cost of two representations.} This duality is the model's weakest point and
+worth stating plainly. A third-party \texttt{/StrikeOut} with no \texttt{/PLP} becomes a
+strikeout in this reader, which is correct; a \texttt{/StrikeOut} written by this reader for a
+\emph{replace text} annotation becomes a strikethrough everywhere else, which is the closest
+the format can express and is what the paper's \S\ref{sec:pdf-layer} describes as a
+limitation rather than a feature. Two representations can also disagree --- a file edited in
+another application may carry a \texttt{/PLP} kind that its subtype no longer supports --- and
+the loader resolves that in favour of the subtype when the two are incompatible, silently. We
+know of no such file; the rule exists because guessing in the other direction would be worse.
+
+\paragraph{Threads.} A reply is its own annotation, a \texttt{/Text} object whose \texttt{/IRT}
+points at its parent through an indirect reference; this is the mechanism every reader uses
+to display a conversation. Reading back therefore takes two passes: a reply may reference a
+parent that appears later in the page's list, so the loader collects replies first and attaches
+them once every annotation is known. A reply whose parent lives on another page is still
+shown, rather than dropped, because a missing parent is a fact about the file rather than
+about the reply.
+
+\paragraph{Identity and deletion.} Annotations carry a locally generated identifier and,
+separately, the object number they were read from. The two must not be conflated: the
+identifier survives an edit, while the object number is what a save must remove. Keeping the
+second only on the document session, not on the annotation, is the design that made
+\S\ref{sec:incremental} correct.
+
+\subsection{Interaction}
+
+Gestures are owned by the annotation layer rather than by the tool manager, because they
+differ per kind: text markup consumes a selection, ink and rectangles drag out geometry, a
+note is a single click, and a stamp is a click with a size of its own.
+
+Two interaction rules were learned from defects:
+
+\begin{itemize}
+  \item \textbf{A click selects an annotation under any tool}, and the \emph{gesture} belongs
+        to the active tool. An earlier version stopped propagation whenever a pointer landed on
+        an annotation, which broke drag-to-scroll and marquee selection for gestures that
+        merely started on top of a mark.
+  \item \textbf{A text tool pressed on an existing text box edits it} rather than stacking a
+        blank box on top. The earlier behaviour selected the annotation and then covered it with
+        an empty box, which a user reasonably reported as ``I cannot select my annotation''.
+\end{itemize}
+
+\subsection{Rendering and printing}
+
+Pages are virtualised: only pages near the viewport have a rasterised canvas, and a page
+leaving the window drops its canvas while keeping its element. \S\ref{sec:eval} shows the
+consequence in the measurements --- opening a 200-page document and a 24-page document take
+the same time to first painted page.
+
+Printing rasterises the selected range at twice the page size (144\,DPI) into a hidden
+container, hides the application shell with a print stylesheet, and calls the platform's print
+dialog; in the desktop build the same is done through the Electron main process. The printed
+sheets are removed when the print job reports completion rather than on a timer, because a
+timer loses the race on a slow printer.

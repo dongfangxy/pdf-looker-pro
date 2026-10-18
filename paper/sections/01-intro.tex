@@ -1,0 +1,82 @@
+\section{Introduction}
+\label{sec:intro}
+
+A PDF file is a program for a printer: a page tree, content streams, fonts, and a
+cross-reference index that says where every object lives. Readers are therefore easy to
+classify by what they do with those bytes. A \emph{renderer} reads them. A \emph{reader with
+comments} either writes new objects into the file --- which changes the bytes other
+applications see --- or keeps annotations in a companion file, which the reader next to it
+will never show.
+
+The distinction matters because a PDF is usually not the only copy. An annotated manuscript
+is mailed to a co-author, a marked-up drawing goes to a fabricator, a reviewed contract goes
+back to a lawyer. An annotation that lives in a sidecar reaches none of them.
+
+Writing into a PDF is not hard to begin and hard to get right. The format is designed for
+\emph{incremental} updates: append objects, rewrite the dictionaries that changed, add
+another cross-reference section pointing back at the previous one, and the file remains valid
+for every existing reader. The difficulty is that an update is a \emph{diff}, so every save
+has to know what the previous save did. A writer that only appends is correct exactly once.
+
+This paper reports what it took to build such a reader as a self-contained system:
+\textbf{PDF Looker Pro}, an MIT-licensed desktop application for Windows whose PDF layer
+--- parser, incremental writer, whole-document rewrite and merger --- is written from
+scratch in TypeScript. The only runtime dependency is pdf.js~\cite{pdfjs}, used for
+rasterisation and text extraction; the page model, the writers and the annotation model are
+the authors' own. The feature set follows that of a long-standing commercial Windows viewer
+for which development has ceased~\cite{pdfxchange}; there is no affiliation with it and no
+code in common.
+
+\paragraph{Contributions.} We claim no new algorithm. The contributions are an account of
+the invariants that a system of this kind must satisfy, the design that satisfies them, and a
+verification methodology with an honest record of what it caught and what it missed.
+
+\begin{enumerate}
+  \item \textbf{A deletion-correct incremental annotation writer}
+        (\S\ref{sec:incremental}). A page's \texttt{/Annots} is rebuilt as
+        \emph{(existing $\setminus$ replaced) $\cup$ new}, where ``replaced'' is the set of
+        object numbers the previous save produced. A page whose annotations were all deleted
+        is still rewritten, because nothing else removes an obsolete entry. We show the two
+        user-visible symptoms of violating this invariant --- annotations duplicating on every
+        save, and deleted annotations reappearing --- both of which occurred in this codebase
+        and both of which are now covered by a regression test.
+
+  \item \textbf{A whole-document rewrite that materialises inheritance}
+        (\S\ref{sec:rewrite}). Flattening the page tree to support delete, insert, reorder,
+        extract and crop destroys attributes a page inherited from intermediate
+        \texttt{/Pages} nodes (\texttt{MediaBox}, \texttt{CropBox}, \texttt{Resources},
+        \texttt{Rotate}, \texttt{UserUnit}). The rewrite writes them onto every page, copies
+        objects verbatim when they are stored uncompressed, re-serialises those inside object
+        streams, and recomputes the cross-reference.
+
+  \item \textbf{Cross-document merging by reference renumbering}
+        (\S\ref{sec:merge}). The incoming object graph is renumbered above the host's highest
+        object number; every reference is rewritten, every stream's bytes are copied
+        unchanged, and the incoming pages are rebuilt on the host's page tree.
+
+  \item \textbf{A dual-representation annotation model} (\S\ref{sec:annot-model}) that writes
+        a standard subtype so other readers display the mark, and a private dictionary so this
+        reader restores it without loss. We state the cost: two representations can disagree,
+        and the standard one cannot express everything the private one can.
+
+  \item \textbf{Search over a virtualised document} (\S\ref{sec:search}) that highlights by
+        rewriting the text layer's spans, so a painted match is aligned with the painted
+        glyphs by construction, guarded by a comparison against the strings the index was
+        built from.
+
+  \item \textbf{A dual-target verification methodology} (\S\ref{sec:verification}): 789
+        behavioural assertions over 31 suites, 734 driving a browser build and 55 driving the
+        packaged Electron application as a real executable, with a case study of a defect the
+        second target caught and of three defects the authors introduced into the harness
+        itself.
+\end{enumerate}
+
+\paragraph{Scope.} The paper describes a desktop application, not a library or a format
+extension. It does not claim conformance to any profile of ISO 32000~\cite{iso32000}, does not
+handle encrypted documents for writing, and does not implement forms, digital signatures or
+optical character recognition. Section~\ref{sec:limits} lists the limitations in full; we
+regard that list as a deliverable, not a disclaimer.
+
+\paragraph{Availability.} Source, tests, build scripts and the measurement scripts that
+produced every number in this paper are at \repo, MIT licensed. The packaged Windows build is
+published as a release artefact of the same repository.

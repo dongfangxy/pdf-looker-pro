@@ -1,0 +1,111 @@
+% PDF Looker Pro: an open-source annotating PDF reader.
+%
+% Build: pdflatex main.tex && pdflatex main.tex  (two passes for references)
+% arXiv: upload this file together with sections/ and figures/ (see paper/README.md).
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{newtxtext,newtxmath}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.misc}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+
+\hypersetup{
+  pdftitle={PDF Looker Pro: an open-source annotating PDF reader and document editor},
+  pdfsubject={Software engineering; document formats},
+  pdfauthor={Chengxi Zhang},
+}
+
+\definecolor{ink}{HTML}{1F2937}
+\definecolor{grey}{HTML}{6B7280}
+\definecolor{accent}{HTML}{1F6FEB}
+\definecolor{codebg}{HTML}{F6F8FA}
+
+\lstdefinestyle{pdf}{%
+  basicstyle=\ttfamily\footnotesize\color{ink},
+  backgroundcolor=\color{codebg},
+  frame=single, framerule=0.3pt, rulecolor=\color{grey!40},
+  breaklines=true, breakatwhitespace=false,
+  columns=fullflexible, keepspaces=true,
+  showstringspaces=false, xleftmargin=4pt, xrightmargin=4pt,
+  aboveskip=6pt, belowskip=6pt,
+}
+\lstset{style=pdf}
+
+\setlist[itemize]{leftmargin=1.4em,itemsep=1pt,topsep=3pt}
+\setlist[enumerate]{leftmargin=1.6em,itemsep=1pt,topsep=3pt}
+
+\captionsetup{font=small,labelfont=bf}
+\renewcommand{\arraystretch}{1.12}
+
+% Numbers reported in this paper were measured on the artefact; the scripts that
+% produce them live in the repository (tools/collect-metrics.mjs, tools/benchmark.mjs)
+% and their raw output is in paper/metrics/.
+\newcommand{\repo}{\url{https://github.com/dongfangxy/pdf-looker-pro}}
+
+\title{\bfseries PDF Looker Pro: an open-source annotating PDF reader\\ and document editor}
+
+\author{%
+  Chengxi Zhang\\
+  \small Independent researcher\\
+  \small\href{mailto:dongfangxy@163.com}{\texttt{dongfangxy@163.com}}
+}
+\date{October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+Portable Document Format (PDF) readers are abundant, but open-source readers that
+\emph{write} into a PDF rather than beside it are not: most either render the page and keep
+annotations in a sidecar, or depend on a large commercial-grade engine. This paper
+describes \textbf{PDF Looker Pro}, a desktop PDF reader, annotator and page editor whose
+PDF layer is written from scratch in TypeScript and whose only runtime dependency is the
+pdf.js rendering engine. We report the engineering rather than a new algorithm, because the
+interesting failures in this kind of system are invariants that are easy to state and easy
+to violate. Three are examined in detail: an incremental annotation writer must rebuild a
+page's \texttt{/Annots} from ``existing minus replaced, plus new'' or it will duplicate
+every annotation on every save and resurrect every deleted one; a whole-document rewrite
+must materialise attributes a page previously inherited, or flattening the page tree
+silently resizes and reorients it; and merging two documents must renumber every reference
+in the incoming object graph while copying stream bytes verbatim. The annotation model
+keeps two representations of each mark, a standard subtype for interoperability and a
+private dictionary for lossless round-tripping, and the paper is explicit about the cost of
+that duality. The system is verified by 789 behavioural assertions over 31 suites --- 734 against the
+browser build and 55 against the packaged application --- and we report the defects that
+methodology caught, including one the authors introduced into the harness itself, together
+with the case in which it gave a false sense of coverage. The application is 17{,}323 lines of source over 47 files,
+MIT licensed, and publicly available.
+\end{abstract}
+
+\vspace{0.4em}
+\noindent\textbf{Keywords:} PDF, document formats, annotation, incremental update,
+software verification, Electron
+
+\input{sections/01-intro}
+\input{sections/02-related}
+\input{sections/03-architecture}
+\input{sections/04-pdf-layer}
+\input{sections/05-annotations}
+\input{sections/06-search}
+\input{sections/07-verification}
+\input{sections/08-evaluation}
+\input{sections/09-discussion}
+
+% An inline bibliography rather than BibTeX: one fewer tool in the build, and arXiv's
+% compiler runs the same two passes the authors did.
+\input{sections/11-bibliography}
+
+\end{document}

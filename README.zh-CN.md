@@ -151,6 +151,8 @@ docs/            格式文档与设计笔记
 
 ## 文档
 
+描述 PDF 写入器、批注模型与验证方法的论文在 [`paper/`](paper/)：[阅读 PDF](paper/main.pdf)，或看它背后的 LaTeX 源码。
+
 - [`docs/format-arpk.md`](docs/format-arpk.md) — `.arpk` 资源容器格式
 - [`docs/design-notes.md`](docs/design-notes.md) — 设计取舍、踩过的坑、bug 是怎么被找出来的
 - [`docs/RELEASE-1.0.0.md`](docs/RELEASE-1.0.0.md) — 1.0.0 发布说明，含体积问题的讨论

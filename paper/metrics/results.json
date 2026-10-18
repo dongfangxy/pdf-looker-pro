@@ -1,0 +1,229 @@
+{
+  "measuredAt": "2026-10-18T10:48:25.164Z",
+  "node": "v24.19.0",
+  "suites": 31,
+  "browserSuites": 28,
+  "browserAssertions": 734,
+  "packagedSuites": 3,
+  "packagedAssertions": 55,
+  "failures": 0,
+  "detail": [
+    {
+      "suite": "test-container",
+      "passed": 38,
+      "failed": 0,
+      "seconds": 0.1,
+      "kind": "browser"
+    },
+    {
+      "suite": "test-font",
+      "passed": 11,
+      "failed": 0,
+      "seconds": 3,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e",
+      "passed": 45,
+      "failed": 0,
+      "seconds": 13.7,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-i18n",
+      "passed": 47,
+      "failed": 0,
+      "seconds": 8,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-resources",
+      "passed": 29,
+      "failed": 0,
+      "seconds": 5.8,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-p5",
+      "passed": 41,
+      "failed": 0,
+      "seconds": 13.2,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-settings",
+      "passed": 30,
+      "failed": 0,
+      "seconds": 11.6,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-ux",
+      "passed": 36,
+      "failed": 0,
+      "seconds": 15.9,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-tabs",
+      "passed": 21,
+      "failed": 0,
+      "seconds": 17.2,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-styles",
+      "passed": 18,
+      "failed": 0,
+      "seconds": 12.8,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-viewmodes",
+      "passed": 28,
+      "failed": 0,
+      "seconds": 17.2,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-print-loupe",
+      "passed": 31,
+      "failed": 0,
+      "seconds": 10.3,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-pdfwrite",
+      "passed": 39,
+      "failed": 0,
+      "seconds": 4.7,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-pdfroundtrip",
+      "passed": 18,
+      "failed": 0,
+      "seconds": 5.2,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-rewrite",
+      "passed": 32,
+      "failed": 0,
+      "seconds": 4.9,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-pageops",
+      "passed": 27,
+      "failed": 0,
+      "seconds": 31,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-newdoc",
+      "passed": 22,
+      "failed": 0,
+      "seconds": 20.7,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-merge",
+      "passed": 26,
+      "failed": 0,
+      "seconds": 11.7,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-fields",
+      "passed": 21,
+      "failed": 0,
+      "seconds": 14,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-replace",
+      "passed": 20,
+      "failed": 0,
+      "seconds": 8.7,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-flatten",
+      "passed": 17,
+      "failed": 0,
+      "seconds": 12.8,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-author",
+      "passed": 13,
+      "failed": 0,
+      "seconds": 7.6,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-stamp",
+      "passed": 26,
+      "failed": 0,
+      "seconds": 14.7,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-replies",
+      "passed": 19,
+      "failed": 0,
+      "seconds": 6.6,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-summary",
+      "passed": 17,
+      "failed": 0,
+      "seconds": 16.5,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-search",
+      "passed": 22,
+      "failed": 0,
+      "seconds": 17.8,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-savedsearch",
+      "passed": 19,
+      "failed": 0,
+      "seconds": 27.2,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-save-reopen",
+      "passed": 21,
+      "failed": 0,
+      "seconds": 17.2,
+      "kind": "browser"
+    },
+    {
+      "suite": "e2e-electron",
+      "passed": 26,
+      "failed": 0,
+      "seconds": 7.5,
+      "kind": "packaged"
+    },
+    {
+      "suite": "e2e-desktop",
+      "passed": 21,
+      "failed": 0,
+      "seconds": 46.4,
+      "kind": "packaged"
+    },
+    {
+      "suite": "e2e-save",
+      "passed": 8,
+      "failed": 0,
+      "seconds": 8.2,
+      "kind": "packaged"
+    }
+  ]
+}

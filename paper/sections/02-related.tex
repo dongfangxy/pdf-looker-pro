@@ -1,0 +1,65 @@
+\section{Background and related work}
+\label{sec:related}
+
+\paragraph{The format.} PDF is specified by ISO 32000-1~\cite{iso32000}. A file is a
+sequence of indirect objects, a page tree under a catalogue, and a cross-reference table
+that maps object numbers to byte offsets. Two properties matter here. First, the format
+admits \emph{incremental updates}: a new section may be appended at the end of the file with
+its own cross-reference table and a \texttt{/Prev} pointer to the previous one, so the
+original bytes never move. Second, page attributes are \emph{inheritable} along the page
+tree: a page that omits \texttt{/MediaBox} takes the nearest ancestor's.
+
+Streams are stored as a dictionary followed by raw bytes whose length the dictionary
+declares. The bytes may be compressed by any of several filters, and objects may be packed
+into a compressed container called an object stream. A writer that wants to copy a stream
+without decoding it must therefore preserve the bytes exactly and copy the filter
+description; a writer that has to rewrite a reference \emph{inside} an object stream cannot
+do so without decoding and re-encoding the container.
+
+\paragraph{Rendering engines.} pdf.js~\cite{pdfjs} is a JavaScript PDF renderer, Apache-2.0
+licensed, and the rendering engine of Firefox. It exposes a page model and a canvas
+rasteriser, plus a text-extraction API that yields positioned glyph runs. MuPDF~\cite{mupdf}
+is a C engine, dual-licensed AGPL/commercial, with annotation support. PDFium is the engine
+inside Chromium. These are renderers first; writing is either absent or a secondary concern.
+
+\paragraph{Readers and annotators.} Okular~\cite{okular} (KDE, Poppler-backed) and Evince
+(GNOME) are mature open-source readers with annotation support that write annotations into
+the document through their respective back ends. Apache PDFBox~\cite{pdfbox} and iText are
+libraries with full writing support, used by other applications rather than being
+applications themselves. PDF-XChange Viewer~\cite{pdfxchange}, whose feature set this project
+follows, is a commercial Windows viewer that is no longer developed.
+
+The gap this project occupies is deliberately narrow: an \emph{application}, in which the
+reader, the writers and the annotation model are open and readable together, with no engine
+dependency beyond rasterisation, and with the writing logic documented as a set of invariants
+rather than as behaviour to be discovered. We do not claim to be better at rendering, and we
+do not compare rendering quality against the systems above; \S\ref{sec:eval} explains why
+such a comparison would be neither fair nor useful at this stage.
+
+\paragraph{Why write at all.} A sidecar annotation file is simpler in every engineering
+respect: no incremental updates, no object numbering, no risk of corrupting the document. It
+is also invisible to every other application. The design decision recorded here is that the
+document is the artefact that travels, so the annotations must travel inside it. The price is
+paid in \S\ref{sec:pdf-layer}.
+
+\begin{table}[t]
+  \centering
+  \caption{Dependencies. The application's only runtime dependency is the rendering engine.
+  Everything else is a build or verification tool and ships in no artefact.}
+  \label{tab:deps}
+  \small
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    Package & Role & Version & Licence \\
+    \midrule
+    \texttt{pdfjs-dist} & rendering and text extraction & 5.x & Apache-2.0 \\
+    \midrule
+    \multicolumn{4}{@{}l}{\emph{build and verification only}} \\
+    \texttt{electron} & desktop host & 44.x & MIT \\
+    \texttt{electron-builder} & packaging & 26.x & MIT \\
+    \texttt{vite} & bundler & 7.x & MIT \\
+    \texttt{typescript} & type checker (erased at build) & 5.9 & Apache-2.0 \\
+    \texttt{playwright} & browser and Electron driving & 1.64 & Apache-2.0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

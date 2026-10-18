@@ -1,0 +1,161 @@
+\section{The PDF layer}
+\label{sec:pdf-layer}
+
+Five operations touch bytes: parse, incremental write (annotations), whole-document rewrite
+(page operations), merge, and flatten (annotations baked into page content). They share a
+parser and differ in what they are allowed to assume.
+
+\subsection{Parsing}
+
+The parser (\texttt{src/pdf/syntax.ts}, \texttt{document.ts}) handles the parts of ISO 32000
+that real documents use: classic cross-reference tables, cross-reference streams, object
+streams, incremental update chains via \texttt{/Prev}, and the standard filters for the
+streams it must decode (none are decoded for a verbatim copy). It retains for every object
+both the parsed value and, when the object was stored uncompressed, the exact source text.
+
+The parsed value distinguishes streams by carrying their raw bytes:
+\begin{lstlisting}[language={}]
+type PdfStreamValue = {
+  kind: 'stream';
+  dict: PdfDict;
+  raw: Uint8Array;   // exactly as it appears in the file, before any filter
+};
+\end{lstlisting}
+This one field is what makes merging possible without a codec: a stream from another document
+can be written back with its bytes untouched, because the only thing that needed rewriting
+was the dictionary's references. See \S\ref{sec:merge}.
+
+Two parser details caused defects worth recording, because both are invisible until a file is
+written and re-read. First, an end-of-stream marker has two positions --- where the
+\texttt{endstream} keyword begins and where its preceding newline ends --- and slicing content
+with the trimmed one left a trailing newline that looked like the start of the next token.
+Second, object numbers are not necessarily contiguous: a file may reference an object it does
+not define, and the parser must distinguish ``missing'' from ``null'', since a page's
+\texttt{/Annots} may legitimately be absent.
+
+\subsection{The incremental annotation writer}
+\label{sec:incremental}
+
+Saving annotations appends objects to the existing file, rewrites the page dictionaries that
+gained or lost annotations, and appends a cross-reference section whose trailer carries
+\texttt{/Prev} pointing at the previous one. The original bytes are never modified, so the
+operation is reversible by truncation and a reader that ignores the new section still sees a
+valid document.
+
+The invariant that governs everything is how a page's annotation array is computed. Let
+$E$ be the object numbers currently listed in the page's \texttt{/Annots}, $R$ the object
+numbers this writer produced for that page on the previous save, and $N$ the object numbers
+of the annotations now in the model. Then
+
+\begin{lstlisting}[language={}]
+annots = [ refs(E) \ refs(R) ] ++ [ refs(N) ]
+\end{lstlisting}
+
+\noindent
+and the page dictionary is rewritten whenever $N \cup R \neq \emptyset$ --- including when
+$N = \emptyset$, because a page whose annotations were all deleted has no other reason to be
+rewritten, and its \texttt{/Annots} would otherwise keep pointing at them.
+
+\paragraph{What goes wrong without it.} The first implementation appended:
+$\texttt{annots} = E \cup N$. Two symptoms followed, both reported by a user before any test
+noticed.
+
+\begin{enumerate}
+  \item \textbf{Duplication.} Every save appended a fresh copy of every annotation on the page
+        and listed both. Because the copies are byte-identical and coincide geometrically,
+        the page looks correct; the file grows, and the reader may select one copy while
+        deleting another. This reads to a user as ``the delete button does nothing''.
+  \item \textbf{Resurrection.} A deleted annotation was removed from the model but its object
+        was still listed in $E$, so the next save re-published it. The mark could not be
+        removed from the document by any sequence of operations in the application.
+\end{enumerate}
+
+The fix records, per page, the object numbers the writer produced, keeps that map on the
+document session, and passes it back on the next save as $R$; the writer uses the numbers it
+produced this time as the new $R$. Objects superseded by earlier saves remain in the file as
+orphans --- unreferenced, legal, and the price of never rewriting the original bytes.
+\S\ref{sec:verification} describes the regression test, and a note on the test itself: the
+first version of that test counted annotations in the file by calling the writer, which is a
+write, so the counting added copies. It now fetches the saved file and resolves the page's
+\texttt{/Annots}, counting what the file points at rather than what it contains.
+
+\paragraph{Interoperability versus fidelity.} Every annotation is written twice, in a sense:
+once as a standard annotation object that other readers display, and once as a private
+\texttt{/PLP} dictionary holding this application's exact kind, stroke width, dash pattern and
+font size. Standard subtypes cannot express all of it --- a text box and a callout are both
+\texttt{/FreeText}, a replaced word is a \texttt{/StrikeOut} --- so the private entry is what
+makes a round trip lossless. Section~\ref{sec:annot-model} discusses the cost of this duality.
+
+\subsection{Whole-document rewrite}
+\label{sec:rewrite}
+
+Delete, insert, reorder, extract, crop and rotate pages cannot be expressed as an appending
+update if they move pages between documents or change the page order: the page tree has to be
+rebuilt. \texttt{rewritePdf} takes a plan --- for each output page, a source page index plus
+optional rotation, crop box and a flatten step --- and produces a new file.
+
+The invariant here is about \emph{inheritance}. In the source, a page may take
+\texttt{MediaBox}, \texttt{CropBox}, \texttt{Resources}, \texttt{Rotate} and
+\texttt{UserUnit} from an intermediate \texttt{/Pages} node. The rewrite produces a flat page
+tree with one \texttt{/Pages} node, so each page must carry everything it inherited.
+Omitting this does not fail: the file parses, and the pages are the wrong size, or sideways,
+which is a far worse failure mode than an error.
+
+Object handling follows from what the parser retained:
+
+\begin{itemize}
+  \item an object stored uncompressed is copied as its exact source text, with no
+        re-serialisation, so anything the application does not model survives;
+  \item an object inside an object stream is re-serialised from its parsed value, because its
+        original bytes are inside a compressed container;
+  \item a source page object is reused, and its dictionary rewritten, when that page appears
+        exactly once in the plan; otherwise a fresh object is written;
+  \item pages removed by the plan leave their objects unreferenced --- again legal orphans.
+\end{itemize}
+
+Because the plan can reference the same source page more than once, a rotation of a single
+page is a one-page plan and a reorder is an identity plan with a permuted index list; the same
+code path serves all of them.
+
+\subsection{Merging two documents}
+\label{sec:merge}
+
+Merging is the one operation that copies between two object graphs. Every reference inside the
+incoming document must be renumbered to its new home, or it will point at whatever the host
+happens to keep at that number.
+
+The algorithm is: build a map from each incoming object number to a fresh number above the
+host's highest; for every incoming object except the page objects, its \texttt{/Pages} node
+and its catalogue, re-serialise the value through a recursive reference rewrite, keeping
+stream bytes and correcting \texttt{/Length} to the byte count; then build the incoming pages
+on the host's page tree, with the same materialisation as \S\ref{sec:rewrite}.
+
+Three details are easy to get wrong and were:
+
+\begin{enumerate}
+  \item \textbf{Stream bytes are not references.} A stream's data may contain any bytes,
+        including ones that look like \texttt{N 0 R}. Only the dictionary is rewritten.
+  \item \textbf{The incoming page tree is discarded, not merged.} Keeping the incoming
+        \texttt{/Pages} node would leave a second tree with no parent, and readers differ on
+        what to do with it.
+  \item \textbf{Insertion is at a position, not an append.} Merging a cover sheet is the
+        common case, so the interface takes a page index and clamps it to the document rather
+        than rejecting it.
+\end{enumerate}
+
+\subsection{Flattening and summary documents}
+
+\emph{Flattening} bakes annotations into page content: an extra content stream is appended
+rather than merged into the existing one (a stream's bytes are immutable, and concatenating
+inside one is a rewrite of bytes the writer promised not to touch), the page's
+\texttt{/Annots} is dropped, and a Helvetica font is installed into a \emph{copy} of the
+page's resource dictionary so the page's own font numbering is not disturbed.
+
+\emph{Summarising} produces a new document containing the annotated pages. The obvious
+implementation is a text listing of the comments, and it fails on the first document whose
+comments are not in a Latin script: a text summary needs a font that covers whatever the
+reader typed, and embedding one is a large amount of machinery for a summary. The
+implementation instead renders each annotated page --- with its annotations already flattened
+in --- at twice the page size and assembles the images into a new PDF. The result carries the
+marks and the words inside them in any language, needs no font of its own, and costs nothing
+that the printing path did not already provide.

@@ -1,0 +1,79 @@
+\section{Discussion, limitations and conclusion}
+\label{sec:discussion}
+
+\subsection{What generalises}
+
+Three lessons seem portable beyond this application.
+
+\paragraph{An incremental format turns every writer into a stateful operation.} The bug in
+\S\ref{sec:incremental} is not a coding error in the ordinary sense; it is a failure to model
+the writer as having a \emph{past}. A function that appends is correct once, so any provider of
+such a function must answer the question ``what did you write last time?'' The answer in this
+system is a per-page set of object numbers held on the document session, and the general
+statement is that the state belongs next to the bytes, not inside the writer.
+
+\paragraph{Flattening a tree materialises inheritance.} This is true of any format with
+inheritable attributes --- CSS, DOM, scene graphs, PDF page trees. The failure is silent
+because the flattened document is still well-formed; the flaw is that it means something else.
+
+\paragraph{A test can be wrong in a way that looks like a finding.} The projection trap in
+\S\ref{sec:verification} cost the project more time than any product defect, twice, on the same
+feature pattern. The rule we now apply --- assert against the model, not against a debug
+surface that describes the model --- is cheap and should have been adopted on the first
+occurrence.
+
+\subsection{Limitations}
+\label{sec:limits}
+
+This list is the boundary of what the paper's claims cover.
+
+\begin{itemize}
+  \item \textbf{No installer and no code signing.} The application ships as a portable
+        executable; Windows SmartScreen warns on first run. Fixing this needs a code-signing
+        certificate, not code.
+  \item \textbf{Windows only.} The packaged target is Windows x64. Nothing in the renderer is
+        platform-specific, but the shell is not exercised elsewhere.
+  \item \textbf{Encrypted documents are refused for writing.} They open for reading through the
+        renderer; an annotation save against an encrypted file is rejected rather than
+        attempted.
+  \item \textbf{Files grow with every save.} The incremental writer never rewrites the original
+        bytes, so superseded objects remain as orphans. A compaction pass would need a
+        whole-document rewrite and is not implemented.
+  \item \textbf{Flattening cannot encode text outside Latin-1.} The embedded appearance font is
+        a standard Helvetica; a flatten of Chinese or Greek annotation text renders as
+        placeholders. The summary feature avoids this by rendering pages instead of writing
+        text (\S\ref{sec:pdf-layer}).
+  \item \textbf{No form filling, digital signatures or OCR.} Form fields are highlighted, and
+        \S\ref{sec:fields} is explicit about why that is not the same as supporting forms.
+  \item \textbf{Replace text is written as \texttt{/StrikeOut}}. The format has no replace-text
+        annotation type; another reader shows the strike and not the substitution, which is
+        visible in the PDF and correct, and incomplete as a representation of the intent.
+  \item \textbf{One machine, one engine.} The timings come from a single Windows host and a
+        single pdf.js version.
+  \item \textbf{Rendering quality is not evaluated.} The application delegates rasterisation to
+        pdf.js; any rendering difference the reader observes is the engine's, not this
+        project's, and the paper makes no claim either way.
+\end{itemize}
+
+\subsection{Conclusion}
+
+A PDF reader that writes is a different system from a PDF reader that renders, and the
+difference is concentrated in a small number of invariants that are easy to state and easy to
+break: rebuild a page's annotation array rather than appending to it; materialise what a page
+inherits before flattening its tree; renumber references when copying between documents and
+leave stream bytes alone. Each invariant, violated, produces a file that opens and is wrong ---
+which is why the verification described here asks questions of pixels and bytes rather than of
+return values, and why the paper reports the defects that reached a user as well as the ones
+the suites caught.
+
+The application is 17{,}323 lines of source over 47 files with one runtime dependency, MIT
+licensed, and available with its tests, its measurement scripts and the scripts that rebuilt
+every figure in this paper at \repo.
+
+\section*{Acknowledgements}
+
+The annotation model's dual representation, the coordinate convention of
+\S\ref{sec:annotations} and the decision to write into the document rather than beside it were
+all consequences of using the software daily while building it. The pdf.js project
+(\cite{pdfjs}) does the rendering; the writer's invariants were learned by breaking them.
+

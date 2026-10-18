@@ -1,0 +1,109 @@
+\section{Verification}
+\label{sec:verification}
+
+\subsection{What is asserted}
+
+The project has no unit-test pyramid. It has \textbf{31 suites of behavioural assertions},
+each of which drives the real application --- a real browser for the renderer, the real
+packaged executable for the desktop build --- and then asks questions of what it produced:
+pixels, bytes, and document model state.
+
+The choice follows from where the defects were. In a system that parses, rewrites and
+re-parses a binary format, the interesting failure is rarely a wrong return value; it is a file
+that opens and is wrong. Two examples from the suites:
+
+\begin{itemize}
+  \item After a save and a reopen, a text annotation is clicked with a real mouse and the
+        assertion is that the annotation is selected and shows a resize grip --- not that a
+        function returned an object.
+  \item After flattening, the styled text is sampled from the rendered canvas at the
+        coordinates the annotation occupied, and the sampled colour must be the annotation's
+        colour. A flattening bug that wrote the operators in the wrong coordinate system
+        produces a valid file and fails this assertion.
+\end{itemize}
+
+Snapshots are deliberately not used: they would freeze rendering differences between browser
+versions and say nothing about whether a saved file is correct.
+
+\subsection{Two targets}
+
+The renderer is verified in a headless browser; the desktop shell is verified by launching the
+packaged executable through Playwright's Electron support. Both are necessary because they fail
+differently. The browser build exercises the code paths a web deployment would take, and the
+packaged build is the only place where file dialogues, native menus, window geometry memory and
+the print path through the main process exist at all.
+
+The split, measured, is 734 assertions over 28 suites for the browser build and 55 over 3
+suites for the packaged application; Table~\ref{tab:suites} groups them.
+
+\begin{table}[t]
+  \centering
+  \caption{The verification suites, grouped. The per-suite breakdown is in the repository
+  (\texttt{paper/\allowbreak metrics/\allowbreak results.json}, produced by \texttt{tools/\allowbreak collect-metrics.mjs}).}
+  \label{tab:suites}
+  \small
+  \begin{tabular}{@{}lrr@{}}
+    \toprule
+    Group & Suites & Assertions \\
+    \midrule
+    Foundations: resource container, embedded font, i18n packs & 3 & 78 \\
+    Reading and interface: layout, view modes, zoom, print, themes, tabs & 9 & 297 \\
+    PDF writing: incremental save, round trip, rewrite, page operations, merge & 8 & 202 \\
+    Annotations: author, stamp, reply, replace, flatten, summary, fields & 6 & 116 \\
+    Search: in-document, saved & 2 & 41 \\
+    \midrule
+    Browser build & 28 & 734 \\
+    Packaged application & 3 & 55 \\
+    \midrule
+    \textbf{Total} & \textbf{31} & \textbf{789} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Defects the methodology caught}
+
+\paragraph{The one it did not catch first.} The annotation duplication and resurrection
+described in \S\ref{sec:incremental} was reported by a user after release, not found by the
+suites. The reason is instructive: the round-trip suite asserted that annotations survived a
+save and reopen --- which they did, twice over. Nothing asserted that saving \emph{twice}
+changed nothing, and nothing asserted that a deleted annotation was gone from the file. Both
+assertions now exist, in \texttt{e2e-save-reopen}: save two, reopen, click one, save twice
+more, delete one, save, reopen, delete the last, save, reopen.
+
+\paragraph{Defects in the harness itself.} Three failures were in the measurement rather than
+the product, and all three are worth recording because each produced a confident wrong answer.
+
+\begin{enumerate}
+  \item \textbf{Counting by writing.} The first version of the regression test counted the
+        annotations in the saved file by calling the writer. The writer appends, so the act of
+        counting added a copy, and the test failed for a reason of its own making. The test now
+        fetches the saved bytes and resolves the page's \texttt{/Annots}, which counts what the
+        file \emph{points at} rather than what it contains.
+  \item \textbf{Testing the projection.} Two features --- an annotation author and a stamp name
+        --- were briefly diagnosed as broken because the test read state through a hand-written
+        debug projection that listed a fixed set of fields, and the projection had not been
+        extended. The feature worked; the projection lied. This is the most expensive mistake
+        in the project's history, because it is invisible: a projection tested through itself
+        proves only that the projection works. The rule now is that assertions read the
+        document model directly wherever a hook is not the thing under test.
+  \item \textbf{An unwritten fixture.} Continuous integration went red for three consecutive
+        commits because the fixtures a suite opens are generated by a script, the fixture
+        directory is intentionally not committed, and a new generator had not been added to
+        that script. The suite timed out waiting for a page that was never served. The CI log
+        named the suite; nothing named the cause.
+\end{enumerate}
+
+\paragraph{The limits of the harness.} Two are known and reported rather than papered over.
+Synthetic mouse-button events do not reach the packaged window through the automation layer, so
+the packaged suite asserts what the harness can prove (the tool is selectable, the region
+exists) and does not claim to have dragged anything. And the window-geometry assertion is
+stateful: it fails when three suites run back to back with the process killed between them and
+passes when run alone, because it reads geometry a previous run wrote.
+
+\subsection{Reproducing the numbers}
+
+Every figure in this paper comes from a script in the repository, not from a notebook.
+\texttt{tools/\allowbreak collect-metrics.mjs} runs the 31 suites and parses each one's summary line into
+\texttt{paper/\allowbreak metrics/\allowbreak results.json}; \texttt{tools/\allowbreak benchmark.mjs} produces the timings in
+Table~\ref{tab:timings} and writes \texttt{paper/\allowbreak metrics/\allowbreak benchmark.json}. Both refuse to guess:
+a suite that fails is recorded as failing and a timing that cannot be taken is \texttt{null}.

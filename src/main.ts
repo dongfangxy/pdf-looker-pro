@@ -308,6 +308,16 @@ if (debugFlag === 'p5') {
     return { pageCount: result.pageCount, inserted: result.inserted, bytes: Array.from(result.bytes) };
   };
 
+  /** Builds the full-text index and reports how long it took; used by the benchmark. */
+  hooks['__indexAll'] = async () => {
+    const doc = activeSession?.opened?.doc;
+    if (!doc) throw new Error('no document');
+    const index = new FindIndex();
+    const started = performance.now();
+    await index.build(doc);
+    return performance.now() - started;
+  };
+
   hooks['__rewritePdf'] = async (plan: PagePlan[]) => {
     const source = activeSession?.bytes;
     if (!source) throw new Error('当前文档没有原始数据');

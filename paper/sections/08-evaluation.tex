@@ -1,0 +1,109 @@
+\section{Evaluation}
+\label{sec:eval}
+
+\subsection{What is measured, and what is not}
+
+Three things are measured: the size of the system, the size of what ships, and the wall-clock
+cost of the operations the paper describes. All three are taken from the artefact on one
+machine (Windows 11, Node 24, an x86-64 desktop CPU) with the scripts named in
+\S\ref{sec:verification}.
+
+We do \textbf{not} report a comparison against other readers, and the reason is not modesty.
+A fair comparison would need a matched document corpus, a defined set of tasks, and a
+measurement of correctness as well as speed --- and this system has no claim to be faster than
+an engine written in C. What the numbers below establish is narrower and, we think, more
+useful: that the writing operations are cheap enough to run on every save, and that
+virtualisation makes open time independent of document length.
+
+\subsection{Size}
+
+\begin{table}[t]
+  \centering
+  \caption{What ships. The unpacked executable is the application plus the Electron runtime;
+  the renderer bundle is the code this paper describes.}
+  \label{tab:sizes}
+  \small
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    Artefact & Size \\
+    \midrule
+    Renderer bundle, JavaScript & 660.2\,kB (197.8\,kB gzip) \\
+    Renderer bundle, CSS & 26.1\,kB (6.0\,kB gzip) \\
+    UI resource container & 19.0\,kB \\
+    Application source & 17{,}323 lines over 47 files \\
+    Test and tooling source & 10{,}594 lines over 52 files \\
+    \midrule
+    Portable executable (single file) & 108.1\,MB \\
+    Unpacked executable & 235.6\,MB \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Table~\ref{tab:sizes} separates two facts that are usually conflated. The code this paper
+describes is 198\,kB compressed; the download is 108\,MB, and 99.8\,\% of it is the Electron
+runtime. That ratio is a property of the packaging choice, not of the application, and it is
+the project's largest engineering compromise: a native shell would ship a few megabytes and
+cost months of platform work.
+
+The test-to-application line ratio is 0.61:1. We report it because it is a design choice with
+a cost --- a tenth of the codebase exists to check the other nine tenths --- and because a
+figure that low is only defensible if the suites assert behaviour rather than implementation,
+which \S\ref{sec:verification} argues they do.
+
+\subsection{Cost of the writing operations}
+
+\begin{table}[t]
+  \centering
+  \caption{Measured cost of the operations this paper describes, in the renderer, excluding
+  file I/O. Median of repeated runs on fixtures of 24 and 200 pages; the raw samples are in
+  \texttt{paper/\allowbreak metrics/\allowbreak benchmark.json}.}
+  \label{tab:timings}
+  \small
+  \begin{tabular}{@{}lrr@{}}
+    \toprule
+    Operation & Document & Median \\
+    \midrule
+    Open to first painted page & 24 pages & 271\,ms \\
+    Open to first painted page & 200 pages & 279\,ms \\
+    Build full-text index & 24 pages & 4.9\,ms \\
+    Build full-text index & 200 pages & 40.9\,ms \\
+    Incremental annotation save & 24 pages & 1\,ms \\
+    Whole-document rewrite & 24 pages & 2\,ms \\
+    Merge two 24-page documents & 48 pages out & 3\,ms \\
+    JavaScript heap after opening & 200 pages & 7\,MiB used \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Two rows carry the paper's practical argument.
+
+\paragraph{Open time is independent of length.} 271\,ms for 24 pages and 279\,ms for 200 pages
+--- a 3\,\% difference across an eight-fold increase in document size. This is what
+virtualisation is for: the application rasterises the pages near the viewport and nothing else,
+so the cost of opening is the cost of the first screen plus parsing the cross-reference, not
+the cost of the document.
+
+\paragraph{Writing is cheap enough to do on every save.} An incremental save of a 24-page
+document is around a millisecond; a full rewrite of the same document is two; merging two
+24-page documents into 48 is three. These are single-digit milliseconds for operations that
+earlier sections described as delicate, which is the useful observation about the design: the
+difficulty was never performance, and the invariants in \S\ref{sec:pdf-layer} cost nothing to
+uphold. A save can therefore be conservative --- rewrite the page's annotation array, drop the
+objects it replaces, write a fresh cross-reference --- rather than clever.
+
+The index figure scales linearly: 4.9\,ms for 24 pages, 40.9\,ms for 200, i.e.\ about
+0.2\,ms per page. That is why folder search rebuilds an index per file rather than storing one
+(\S\ref{sec:folder-search}), and why the 7\,MiB heap figure for a 200-page document is
+consistent with holding no more than the pages near the viewport.
+
+\subsection{Threats to validity}
+
+The measurements are from one machine and one rendering engine, and the electron and browser
+versions are pinned only by \texttt{package.json} ranges. The timings are in-process and exclude
+disk and IPC, so they understate what a user waits for on a save; the open-time figures include
+navigation and first paint, so they overstate what a second open of the same file costs.
+
+The assertion count is a measure of effort, not of coverage. There is no instrumentation-based
+coverage figure in this paper because none was collected; a suite count can be raised by
+writing easier tests, and the reader should treat 789 as evidence that many behaviours are
+checked, not as a percentage of the behaviours that exist.

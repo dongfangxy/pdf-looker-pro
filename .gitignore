@@ -8,3 +8,9 @@ public/fixtures/
 
 # Screenshots produced by the verification runs
 docs/*.png
+
+# LaTeX build artefacts; main.pdf and the arXiv archive are kept on purpose.
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/preview/
