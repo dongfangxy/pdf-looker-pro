@@ -139,10 +139,41 @@ contribution; `sections/08-evaluation.tex` and the abstract are written to answe
 how the work was produced.
 
 
-## 5. After it is announced
+## 5. Submitted
 
-- Add the arXiv identifier to the repository's `README.md` and to `docs/RELEASE-2.0.0.md`.
-- arXiv assigns a DOI of the form `10.48550/arXiv.XXXX.XXXXX`; it is citable immediately.
+**2026-10-18 — submission `8247580`, status `submitted`.**
+
+| Field | Value as submitted |
+|---|---|
+| Title | PDF Looker Pro: an open-source annotating PDF reader and document editor |
+| Author | Chengxi Zhang (Jiangnan University, Wuxi 214122, China) |
+| Abstract | 1,737 characters, the text in `abstract.txt` |
+| Comments | 15 pages, 2 figures, 5 tables. Source code and verification suites: the repository URL |
+| Primary | `cs.SE` — Software Engineering |
+| Cross-list | `cs.HC` — Human-Computer Interaction |
+| Licence | **CC BY 4.0** (`creativecommons.org/licenses/by/4.0/`) |
+| Files | LaTeX source, `main.tex` as the top-level file, compiled by arXiv with pdflatex |
+| Compile | `[SUCCEEDED]`, `main.tex => main.pdf`, 15 pages |
+
+The first attempt (submission `8247521`) could not proceed because the archive list held only
+`eess`; the account was in the `eess` group alone. Changing the account e-mail to the
+institutional address `cxzhang@jiangnan.edu.cn` resolved it: the groups became
+`eess, cs, and math`, `cs` appeared in the archive list, and the second submission went
+through in one pass.
+
+### What happens next
+
+arXiv assigns the identifier at announcement, not at submission. Until then the user page
+shows `submit/8247580` with status `submitted`, and the submission can still be revised or
+unsubmitted. Moderation typically takes a day or two.
+
+Once the identifier appears (`arXiv:2610.XXXXX`):
+
+- add it to the repository's `README.md`, `README.zh-CN.md` and `docs/RELEASE-2.0.0.md`;
+- the citable DOI is `10.48550/arXiv.2610.XXXXX`;
+- corrections after announcement go in as a **replacement** (a new version), not a new
+  submission.
+
 
 ## Files
 
