@@ -13,7 +13,7 @@ body:
     attributes:
       label: Version
       description: Shown in the About dialog, or in the release you downloaded
-      placeholder: "1.0.0"
+      placeholder: "2.0.0"
     validations:
       required: true
 

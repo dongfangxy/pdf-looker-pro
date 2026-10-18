@@ -10,7 +10,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4173",
     "typecheck": "tsc --noEmit",
-    "fixtures": "node tools/make-fixture.mjs 24 public/fixtures/test.pdf --outline && node tools/make-fixture.mjs 200 public/fixtures/large.pdf",
+    "fixtures": "node tools/make-fixture.mjs 24 public/fixtures/test.pdf --outline && node tools/make-fixture.mjs 200 public/fixtures/large.pdf && node tools/make-form-fixture.mjs",
     "font": "node tools/make-font.mjs assets-src/ui-sans.ttf",
     "font:check": "node tools/validate-font.mjs assets-src/ui-sans.ttf && node tools/test-font.mjs",
     "resources": "node tools/pack-resources.mjs",

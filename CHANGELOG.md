@@ -4,27 +4,6 @@ All notable changes are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2026-10-18
-
-### Fixed
-
-- **Saving no longer duplicates annotations, and a deleted one is really removed.** The
-  incremental writer appended to `/Annots` without dropping what it had written before,
-  so every save added another copy of every annotation and a deletion was undone by the
-  next save. The writer now drops the objects it produced last time before appending the
-  current set, and a page whose annotations were all deleted is still rewritten.
-- **Horizontal wheel scrolling** no longer scrolls the wrong container.
-
-### Added
-
-- Whole-document rewrite, with rotate/delete/insert/extract/crop/reorder, blank
-  documents, documents from an image, and merging another PDF in.
-- Four view modes, actual size, fit visible area, zoom-to, view history, magnifier and
-  printing with a page range, scale and orientation.
-- Six standard stamps, replace text, flattening, annotation summary, measurement labels,
-  annotation authors, replies and form-field highlighting.
-- A search results panel, folder search across documents, and saved searches.
-
 ## [Unreleased]
 
 ### Added
@@ -104,6 +83,27 @@ All notable changes are recorded here. The format follows
 - Polyline measurement for irregular shapes
 - An installer, in addition to the portable build
 
+## [2.0.0] - 2026-10-18
+
+### Fixed
+
+- **Saving no longer duplicates annotations, and a deleted one is really removed.** The
+  incremental writer appended to `/Annots` without dropping what it had written before,
+  so every save added another copy of every annotation and a deletion was undone by the
+  next save. The writer now drops the objects it produced last time before appending the
+  current set, and a page whose annotations were all deleted is still rewritten.
+- **Horizontal wheel scrolling** no longer scrolls the wrong container.
+
+### Added
+
+- Whole-document rewrite, with rotate/delete/insert/extract/crop/reorder, blank
+  documents, documents from an image, and merging another PDF in.
+- Four view modes, actual size, fit visible area, zoom-to, view history, magnifier and
+  printing with a page range, scale and orientation.
+- Six standard stamps, replace text, flattening, annotation summary, measurement labels,
+  annotation authors, replies and form-field highlighting.
+- A search results panel, folder search across documents, and saved searches.
+
 ## [1.0.0] - 2026-02-14
 
 First public release.
@@ -141,5 +141,6 @@ First public release.
 - Measurement covers two-point distance and rectangular perimeter/area only.
 - No forms, digital signatures or OCR.
 
-[Unreleased]: https://github.com/dongfangxy/pdf-looker-pro/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/dongfangxy/pdf-looker-pro/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/dongfangxy/pdf-looker-pro/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/dongfangxy/pdf-looker-pro/releases/tag/v1.0.0

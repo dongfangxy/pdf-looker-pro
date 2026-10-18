@@ -51,4 +51,6 @@ jobs:
         with:
           files: release/*.exe
           generate_release_notes: true
-          body_path: docs/RELEASE-1.0.0.md
+          # The release body is the 2.0 notes. 1.0's notes stay in the repository as
+          # history, but a published release should describe what it ships.
+          body_path: docs/RELEASE-2.0.0.md

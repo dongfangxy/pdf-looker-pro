@@ -44,7 +44,7 @@ Pushing a `v*` tag triggers `.github/workflows/release.yml`, which:
 3. runs the packaged verification suites,
 4. publishes a GitHub Release with the artefact attached.
 
-The release body is read from `docs/RELEASE-1.0.0.md`. When you cut a new version, copy
+The release body is read from `docs/RELEASE-2.0.0.md`. When you cut a new version, copy
 that file to `docs/RELEASE-<version>.md`, update it, and point `body_path` in the workflow
 at the new file.
 
@@ -62,7 +62,7 @@ and runs the packaged suites.
 
 ## A note on the download size
 
-The 1.0.0 build is about 108 MB, almost entirely the Electron runtime. Reducing it is the
-first roadmap item; `docs/RELEASE-1.0.0.md` lists the specific opportunities and how much
+The 2.0.0 build is about 108 MB, almost entirely the Electron runtime. Reducing it is the
+first roadmap item; `docs/RELEASE-2.0.0.md` lists the specific opportunities and how much
 each is expected to save. Record the new size in the changelog when it changes, so the
 trend is visible.
